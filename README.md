@@ -10,61 +10,6 @@
   One repo, many skills, installable with <a href="https://skills.sh"><code>npx skills</code></a>.
 </p>
 
-## Supported agent CLIs
-
-Skills here use the shared `SKILL.md` format, so one repo feeds many agents. A few of them:
-
-<p align="center">
-  <a href="https://claude.com/claude-code" title="Claude Code">
-    <img src="assets/logos/claude.svg" alt="Claude Code" width="64" height="64" />
-  </a>
-  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  <a href="https://developers.openai.com/codex" title="OpenAI Codex">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="assets/logos/openai-dark.svg" />
-      <img src="assets/logos/openai-light.svg" alt="OpenAI Codex" width="64" height="64" />
-    </picture>
-  </a>
-  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  <a href="https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/use-hooks" title="GitHub Copilot CLI">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="assets/logos/copilot-dark.svg" />
-      <img src="assets/logos/copilot-light.svg" alt="GitHub Copilot" width="64" height="64" />
-    </picture>
-  </a>
-  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  <a href="https://cursor.com/docs/hooks" title="Cursor Agent CLI">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="assets/logos/cursor-dark.svg" />
-      <img src="assets/logos/cursor-light.svg" alt="Cursor Agent" width="64" height="64" />
-    </picture>
-  </a>
-</p>
-<p align="center">
-  <a href="https://opencode.ai/docs/plugins/" title="OpenCode">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="assets/logos/opencode-dark.svg" />
-      <img src="assets/logos/opencode-light.svg" alt="OpenCode" width="64" height="64" />
-    </picture>
-  </a>
-  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  <a href="https://pi.dev" title="Pi (pi-coding-agent)">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="assets/logos/pi-dark.svg" />
-      <img src="assets/logos/pi-light.svg" alt="Pi" width="64" height="64" />
-    </picture>
-  </a>
-  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  <a href="https://geminicli.com/" title="Gemini CLI">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="assets/logos/gemini-dark.svg" />
-      <img src="assets/logos/gemini-light.svg" alt="Gemini CLI" width="64" height="64" />
-    </picture>
-  </a>
-</p>
-
-<p align="center"><sub>…and 60+ more via <a href="https://skills.sh"><code>npx skills</code></a> (`-a &lt;agent&gt;`).</sub></p>
-
 ## What's an agent skill?
 
 A skill is a folder with a `SKILL.md` (YAML frontmatter: `name` + `description`,
