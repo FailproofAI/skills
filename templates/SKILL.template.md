@@ -1,4 +1,3 @@
-<!-- TEMPLATE — not a loadable skill -->
 ---
 name: my-skill
 description: >-
@@ -14,14 +13,17 @@ Briefly: what this skill operates on and how. Keep the body under ~500 lines;
 push exhaustive detail into `references/` and point to it from here.
 
 ## When to use / not use
+
 - Use when: …
 - Don't use for: …
 
 ## How to do the task
+
 1. …
 2. …
 
 ## Conventions / contract
+
 - …
 
 > Layout reminder: keep `SKILL.md` at `skills/<name>/SKILL.md`, put supporting
