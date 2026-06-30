@@ -2,10 +2,8 @@
   <img src="assets/failproofai-full.svg" alt="FailproofAI" width="440" />
 </p>
 
-<h1 align="center">FailproofAI Skills</h1>
-
 <p align="center">
-  The FailproofAI org's collection of <strong>agent skills</strong> — reusable, cross-agent
+  The FailproofAI org's collection of <strong>agent skills</strong> - reusable, cross-agent
   instruction sets that teach a coding agent how to do a specific job well.<br/>
   One repo, many skills, installable with <a href="https://skills.sh"><code>npx skills</code></a>.
 </p>
@@ -13,7 +11,7 @@
 ## What's an agent skill?
 
 A skill is a folder with a `SKILL.md` (YAML frontmatter: `name` + `description`,
-then instructions). Agents load it when a task matches the description — so the
+then instructions). Agents load it when a task matches the description, so the
 agent gains a specialized, repeatable capability without you re-explaining it.
 The format is shared across agents, so one definition works everywhere.
 
@@ -21,7 +19,7 @@ The format is shared across agents, so one definition works everywhere.
 
 | Skill | What it does | Source of truth |
 |---|---|---|
-| [`agenteye-cli`](skills/agenteye-cli/) | Operate an AgentEye deployment from the terminal via the `agenteye` CLI — inspect telemetry (errors, sessions, events, evals), triage alerts/incidents, manage keys/users/settings, run queries. | Synced from `FailproofAI/agenteye` → `cli/skill/skills/agenteye-cli/` (private). Do **not** hand-edit here. |
+| [`agenteye-cli`](skills/agenteye-cli/) | Operate an AgentEye deployment from the terminal via the `agenteye` CLI - inspect telemetry (errors, sessions, events, evals), triage alerts/incidents, manage keys/users/settings, run queries. | Synced from `FailproofAI/agenteye` → `cli/skill/skills/agenteye-cli/` (private). Do **not** hand-edit here. |
 
 ## Install
 
@@ -29,10 +27,16 @@ Using the [`skills`](https://skills.sh) CLI (`vercel-labs/skills`). It auto-dete
 your agent(s); pass `-a` to be explicit.
 
 ```bash
-# the whole collection (project-local → ./.claude/skills/)
+# the whole collection (project-local → ./.agents/skills/)
+npx skills add FailproofAI/skills
+
+# just one skill
+npx skills add FailproofAI/skills --skill skillname
+
+# explicitly for claude-code
 npx skills add FailproofAI/skills -a claude-code
 
-# just ONE skill — use the --skill flag (NOT a /agenteye-cli path segment)
+# just ONE skill - use the --skill flag (NOT a /agenteye-cli path segment)
 npx skills add FailproofAI/skills --skill agenteye-cli -a claude-code
 
 # global (all projects → ~/.claude/skills/), with real copies instead of symlinks
@@ -56,8 +60,8 @@ npx skills remove agenteye-cli             # remove it
 ### Scope & install method
 | Scope | Flag | Where it lands (Claude Code) |
 |---|---|---|
-| Project (default) | _(none)_ | `./.claude/skills/` — commit with your project |
-| Global | `-g` | `~/.claude/skills/` — across all projects |
+| Project (default) | _(none)_ | `./.claude/skills/` - commit with your project |
+| Global | `-g` | `~/.claude/skills/` - across all projects |
 
 By default the CLI **symlinks** each agent's skills dir to one canonical copy
 (easy updates). If your environment doesn't follow symlinks, add **`--copy`** for
@@ -68,9 +72,9 @@ independent real copies.
 > need auth or an internal mirror. (The `agenteye-cli` content is already scrubbed
 > safe-for-public.)
 
-### Troubleshooting — "installed, but my agent doesn't see it"
-- **Claude Code reads `.claude/skills/` (project) / `~/.claude/skills/` (global) — *not* `.agents/skills/`.** `.agents/skills/` is the vendor-neutral path other agents use (Codex project, Cursor, Gemini CLI, …) and where the symlink **canonical store** lives. If the skill only shows up under `~/.agents/skills/` and Claude Code ignores it, the per-agent symlink wasn't created or wasn't followed.
-- **Fix:** re-install targeting the agent explicitly and forcing real copies —
+### Troubleshooting - "installed, but my agent doesn't see it"
+- **Claude Code reads `.claude/skills/` (project) / `~/.claude/skills/` (global) - *not* `.agents/skills/`.** `.agents/skills/` is the vendor-neutral path other agents use (Codex project, Cursor, Gemini CLI, …) and where the symlink **canonical store** lives. If the skill only shows up under `~/.agents/skills/` and Claude Code ignores it, the per-agent symlink wasn't created or wasn't followed.
+- **Fix:** re-install targeting the agent explicitly and forcing real copies:
   `npx skills add FailproofAI/skills --skill agenteye-cli -a claude-code -g --copy`
 - **Verify with the CLI, not by eyeballing dirs:** `npx skills list -a claude-code`.
 - **Codex paths:** project `.agents/skills/`, global `~/.codex/skills/`.
@@ -82,7 +86,7 @@ skills/                         ← this repo
 ├── README.md
 ├── LICENSE
 ├── CONTRIBUTING.md             ← conventions + how to add a skill
-├── assets/                     ← banner + per-agent logos for this README
+├── assets/                     ← banner for this README
 ├── templates/SKILL.md          ← starter for a new skill (or use `npx skills init`)
 ├── scripts/validate-skills.py  ← frontmatter/layout validator (run before merge)
 └── skills/                     ← one self-contained folder per skill
@@ -102,4 +106,4 @@ or update a skill.
 `npx skills` sends anonymous usage telemetry (and transmits skill files for a
 public repo); disable with `DISABLE_TELEMETRY=1` or `DO_NOT_TRACK=1` (auto-off in CI).
 
-License: see [`LICENSE`](LICENSE) — _placeholder; to be finalized before public release._
+License: see [`LICENSE`](LICENSE) - _placeholder; to be finalized before public release._
