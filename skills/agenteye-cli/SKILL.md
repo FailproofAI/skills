@@ -1,15 +1,17 @@
 ---
 name: agenteye-cli
 description: |-
-  The way to answer "how are my production AI agents doing?" and to run the team's agent-observability deployment — reach for it even on casual phrasing that names no tool.
+  Operate and inspect a production AI-agent observability deployment
+  via the `agenteye` CLI.
 
-  Trigger when the user wants to:
-  • inspect agent telemetry — did agents error/fail/go flaky; sessions, events, latency, token usage, slowest models; eval/quality scores and whether quality dropped;
-  • operate the deployment — ack/assign/resolve firing alerts and incidents with notes; see who has access and change roles (e.g. make someone read-only); create or scope API keys (e.g. a CI key that only pushes events); change settings; run saved or ad-hoc ClickHouse queries.
+  Use for: agent errors, failures, latency, token usage, slowest models,
+  eval/quality scores and regressions; ack, assign, and resolve alerts and
+  incidents; manage roles and API keys; change settings; run ClickHouse queries.
 
-  Served by the `agenteye` CLI against an AgentEye platform.
+  Trigger even on casual phrasing that names no tool.
 
-  NOT for adding SDK/instrumentation to your app, debugging the collector/daemon, or unrelated dev work (why a build/CI run failed, rotating non-AgentEye secrets).
+  NOT for: app SDK instrumentation, debugging the collector/daemon,
+  or unrelated dev work.
 ---
 
 # AgentEye CLI
