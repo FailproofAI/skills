@@ -1,3 +1,4 @@
+<!-- TEMPLATE — not a loadable skill -->
 ---
 name: my-skill
 description: >-
