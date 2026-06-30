@@ -38,7 +38,7 @@ and reading it wastes effort.
 
 Throughout this skill, `agenteye` means "whichever form you resolved."
 
-## 2. The contract (the CLI enforces it — work with it, don't fight it)
+## 2. The contract (the CLI enforces it, work with it, don't fight it)
 
 - **Global options go BEFORE the command:** `agenteye --json events`, never
   `agenteye events --json`. Globals are `--base-url`, `--org`, `--token`,
