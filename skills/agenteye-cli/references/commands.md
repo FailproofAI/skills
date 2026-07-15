@@ -29,14 +29,14 @@ Set on the CLI, **before** the subcommand. Precedence: flag > env var > config f
 | `--insecure` / `--secure` | `AGENTEYE_INSECURE` | Skip / require TLS verification (for self-signed dev certs; saved at login). |
 | `--version` | | Print version (also `agenteye version`). |
 
-Config dir honours `AGENTEYE_HOME`. Telemetry is on by default; disable with `AGENTEYE_ANALYTICS_DISABLED=1` or `DO_NOT_TRACK=1`.
+Config dir honours `AGENTEYE_HOME`. Telemetry is currently disabled globally while its send path is made fully non-blocking. `AGENTEYE_ANALYTICS_DISABLED=1` and `DO_NOT_TRACK=1` remain supported opt-out controls for when telemetry is re-enabled.
 
 ## Shared input conventions
 - **`--json`** on any command → pure JSON on stdout (no Rich chrome). Mutations under `--json` auto-skip their confirm prompt.
 - **`--yes` / `-y`** explicitly skips a confirm prompt. (Confirms are also auto-skipped on a non-TTY — i.e. whenever Claude runs it — so always confirm with the user yourself first.)
 - **`--all` + `--limit`**: `--limit` (`-n`) defaults to **50**; `--all` auto-paginates (client chunks of 200) **up to `--limit`**, NOT without bound. So a bare `--all` still stops at 50 rows. For a full sweep on `events/sessions/evals/errors`, pass a high explicit cap: **`--all --limit 1000`** (or higher). To just get window totals, use `--aggregate` (covers the whole window regardless of row caps).
 - **`--fields a,b,c`** projects only those keys (where supported: sessions/evals, keys, query list).
-- **`--since <window>`** relative window: `24h`, `7d`, `30d`, etc. `--from`/`--to` take ISO timestamps **with `T` and a timezone** (e.g. `2026-06-01T00:00:00Z`) — space-separated or tz-less is a usage error (exit 2).
+- **`--since <window>`** relative window — one of `15m`, `1h`, `6h`, `24h`, `7d`, `all` (any other value is a usage error, exit 2). `--from`/`--to` take ISO timestamps **with `T` and a timezone** (e.g. `2026-06-01T00:00:00Z`) — space-separated or tz-less is a usage error (exit 2).
 - **`--file payload.json`** (or `--file -` for stdin) supplies a full JSON request body on `alerts`, `settings set`, and `users create/update` — mutually exclusive with the discrete flags. Saved-query SQL uses `--sql @file.sql`.
 - **Multi-value filters** are CSV → `IN (...)` (union within a filter, AND across filters): `--event-type tool_use,tool_result`. `--search` is repeated/OR (matches ANY term), payload-only.
 
@@ -57,8 +57,26 @@ Config dir honours `AGENTEYE_HOME`. Telemetry is on by default; disable with `AG
 All read-only; never need confirmation.
 
 ### events
-`agenteye events [filters] [--all]` — raw event log, newest first.
+`agenteye events [filters] [--all]` — event log, newest first. **Default is the light,
+payload-free feed** (`/api/events/summary`): rows carry `summary, is_error, error_type,
+output_tokens, context_window, context_fill` (a server-computed `summary`, no raw payload).
+`--session-id`, `--all`, and structured filters stay on this fast path. `--search` is the
+exception: responses remain payload-free, but the server must scan `payload` to match the
+free-text term, so broad searches can still be expensive. To get the raw `payload`, opt
+into the **full feed** with `--full` (or `--fields payload`) — this hits the heavy
+`/api/events`, which is slow at scale, so keep it bounded (pair `--full` with one
+`--session-id`). e.g. `agenteye --json events --full --session-id run-1 --all | jq '.events[].payload'`.
 Filters: `--session-id <id>` `--agent-id <id>` `--event-type <csv>` `--env <csv>` `--since <window>` / `--from`/`--to` `--search <term>` (repeatable, payload OR-match).
+
+#### Getting the raw payload
+The default `events`/`errors` reads are payload-free. Only `--full` (or `--fields payload`)
+returns the raw `payload`, and it hits the heavy `/api/events` feed — **always bound it**
+(pair with `--session-id`); an unbounded `events --full` can time out / degrade ClickHouse at
+scale.
+- **A whole session:** `agenteye --json events --full --session-id <SESSION_ID> --all --limit 1000 | jq '.events[].payload'`
+- **A single event:** scope to its session, then pick by id — `agenteye --json events --full --session-id <SESSION_ID> --all | jq '.events[] | select(.id == <EVENT_ID>) | .payload'`
+- **An error's payload:** two steps — `agenteye --json errors --error-type <T> --since 24h` (gives the error's `id` and `session_id`; `errors` is light-only, no payload), then `agenteye --json events --full --session-id <SESSION_ID> --all | jq '.events[] | select(.id == <ERROR_EVENT_ID>) | .payload'`
+- **Precise / by id (avoids the heavy list query):** `agenteye --json query run --sql "SELECT id, event_type, payload FROM events WHERE session_id = '<SESSION_ID>' ORDER BY ts"` — or `WHERE id = <EVENT_ID>`. Reads `payload` directly via the read-only SQL runner (`/api/queries/run`); a bounded `WHERE` is fast.
 
 ### sessions
 `agenteye sessions [filters] [--all]` — agent runs: time/env/agent/session/status (no scores). Filters: `--session-id --agent-id --env --status <error|...> --since`. JSON rows still carry `scores`.
@@ -68,11 +86,11 @@ Filters: `--session-id <id>` `--agent-id <id>` `--event-type <csv>` `--env <csv>
 `agenteye evals --aggregate [--since 7d]` — rollup: `{total, status_counts, score_stats, timeline}` (status mix + per-metric score stats). `--score helpfulness:..0.5` = max 0.5; `helpfulness:0.8..` = min 0.8; `helpfulness:0.5..0.9` = range.
 
 ### errors
-`agenteye errors [filters] [--all]` — errored events (time/event/env/agent/session/summary). Filters incl. `--error-type <csv>`.
+`agenteye errors [filters] [--all]` — errored events (time/event/env/agent/session/summary), from the light payload-free feed (`/api/events/summary`); the `summary` is the server-computed field, and `--json` rows carry no payload. For a run's raw payload use `agenteye events --full --session-id <id>`. Filters incl. `--error-type <csv>`.
 `agenteye errors --aggregate [--since 7d]` — `{total, sessions, agents, last_ts, bins}`.
 
 ### list
-`agenteye list <kind>` — discover valid filter values. Kinds: `envs agents event_types score_filters models hooks triggers tools error_types`. JSON `{kind, values}`. Run this before filtering by a value you're unsure of.
+`agenteye list <kind>` — discover valid filter values. Kinds: `envs agents event_types score_filters models hooks tools error_types`. JSON `{kind, values}`. Run this before filtering by a value you're unsure of.
 
 ## keys
 API keys; the secret is shown **once** on create/regenerate (capture it then). Referenced by **name**.
