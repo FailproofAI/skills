@@ -58,11 +58,17 @@ Some skills are **mirrored from another repo** and must not be edited here —
 edits would be overwritten on the next sync. Their source of truth is listed in
 the README "Skills" table.
 
-- **`agenteye-cli`** → source: `FailproofAI/agenteye` at `cli/skill/skills/agenteye-cli/`
-  (private). To change it, edit it there; a sync workflow (TBD) copies that
-  folder into `skills/agenteye-cli/` here. The mapping is a straight one-folder
-  overwrite:
+Each one is a straight one-folder overwrite out of `FailproofAI/agenteye`
+(private), published by a manual workflow there:
 
-  ```
-  agenteye:cli/skill/skills/agenteye-cli/  ──▶  skills/agenteye-cli/
-  ```
+```
+agenteye:cli/skill/            ──▶  skills/agenteye-cli/        (workflow: Sync agenteye-cli skill)
+agenteye:evaluator-sdk/skill/  ──▶  skills/agenteye-evaluator/  (workflow: Sync agenteye-evaluator skill)
+```
+
+To change one, edit the source folder in agenteye and re-run its workflow from
+agenteye `main`. Each workflow rebuilds its own `sync/<skill>` branch off the
+latest `main` here and **force-pushes** it, refreshing one long-lived PR. So on
+top of not hand-editing the mirrored folder: don't add your own commits to a
+`sync/*` branch either — the next run discards them without warning. Changes
+outside the mirrored folder (a README row, this file) go in a normal PR.
