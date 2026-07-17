@@ -1,17 +1,15 @@
 ---
 name: agenteye-cli
 description: |-
-  Operate and inspect a production AI-agent observability deployment
-  via the `agenteye` CLI.
+  The way to answer "how are my production AI agents doing?" and to run the team's agent-observability deployment — reach for it even on casual phrasing that names no tool.
 
-  Use for: agent errors, failures, latency, token usage, slowest models,
-  eval/quality scores and regressions; ack, assign, and resolve alerts and
-  incidents; manage roles and API keys; change settings; run ClickHouse queries.
+  Trigger when the user wants to:
+  • inspect agent telemetry — did agents error/fail/go flaky; sessions, events, latency, token usage, slowest models; eval/quality scores and whether quality dropped;
+  • operate the deployment — ack/assign/resolve firing alerts and incidents with notes; see who has access and change roles (e.g. make someone read-only); create or scope API keys (e.g. a CI key that only pushes events); change settings; run saved or ad-hoc ClickHouse queries.
 
-  Trigger even on casual phrasing that names no tool.
+  Served by the `agenteye` CLI against an AgentEye platform.
 
-  NOT for: app SDK instrumentation, debugging the collector/daemon,
-  or unrelated dev work.
+  NOT for adding SDK/instrumentation to your app, debugging the collector/daemon, or unrelated dev work (why a build/CI run failed, rotating non-AgentEye secrets).
 ---
 
 # AgentEye CLI
@@ -114,11 +112,11 @@ Pick the right group; full flags are in `references/commands.md` — read it whe
 you need a flag you don't already know.
 
 **Observe (read-only):**
-- `events` — raw event log. `--session-id --event-type --env --agent-id --since --search --all`
+- `events` — event log (light/payload-free responses by default; `--search` still scans payload server-side; `--full` or `--fields payload` returns the raw payload — keep bounded to a `--session-id`). `--session-id --event-type --env --agent-id --since --search --full --all`
 - `sessions` — agent runs (time/env/agent/session/status), no scores.
 - `evals` — evaluation results + scores; `--aggregate` for a health rollup; `--score key:min..max`.
 - `errors` — errored events; `--aggregate` for count / sessions / agents / last-seen.
-- `list <kind>` — **discover valid filter values first**: `envs agents event_types score_filters models hooks triggers tools error_types`.
+- `list <kind>` — **discover valid filter values first**: `envs agents event_types score_filters models hooks tools error_types`.
 
 **Manage (permission-gated, mutations):**
 - `keys list|show|create|update|disable|regenerate` — API keys; secret shown once.
@@ -168,8 +166,15 @@ agenteye --json list agents                                       # find valid a
 agenteye --json errors --since 24h --aggregate                    # how bad is it right now? (full-window totals)
 agenteye --json errors --since 24h --all --limit 1000 | jq '.errors[] | {session_id, error_type}'
 agenteye --json sessions --status error --since 7d --all --limit 1000   # which runs failed
-agenteye --json events --session-id run-001 --all --limit 1000    # every event in one run
+agenteye --json events --session-id run-001 --all --limit 1000    # a run's timeline (light: summaries, no payload)
+agenteye --json events --full --session-id run-001 --all | jq '.events[].payload'   # that run's RAW payloads (--full, bounded)
 ```
+
+- **Raw `payload` is opt-in** — `events`/`errors` responses are payload-free by default; add
+  `--full` (or `--fields payload`) to get it, and **always bound it to a `--session-id`**
+  (the full feed is slow/OOM-prone at scale). For one event or a precise slice, read the
+  column directly: `agenteye --json query run --sql "SELECT payload FROM events WHERE id = <id>"`
+  (or `WHERE session_id = '<id>'`). See `references/commands.md` → "Getting the raw payload".
 
 - **`list <kind>` before filtering** — don't guess an env or agent id; the
   discovery command tells you exactly what exists.
