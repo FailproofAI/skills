@@ -19,7 +19,8 @@ The format is shared across agents, so one definition works everywhere.
 
 | Skill | What it does | Source of truth |
 |---|---|---|
-| [`agenteye-cli`](skills/agenteye-cli/) | Operate an AgentEye deployment from the terminal via the `agenteye` CLI - inspect telemetry (errors, sessions, events, evals), triage alerts/incidents, manage keys/users/settings, run queries. | Synced from `FailproofAI/agenteye` → `cli/skill/skills/agenteye-cli/` (private). Do **not** hand-edit here. |
+| [`agenteye-cli`](skills/agenteye-cli/) | Operate an AgentEye deployment from the terminal via the `agenteye` CLI - inspect telemetry (errors, sessions, events, evals), triage alerts/incidents, manage keys/users/settings, run queries. | Synced from `FailproofAI/agenteye` → `cli/skill/` (private). Do **not** hand-edit here. |
+| [`agenteye-evaluator`](skills/agenteye-evaluator/) | Put automatic quality scores on an agent's production runs - decide which dimensions are worth scoring from real sessions, scaffold the scoring service with the `agenteye-evaluator` Python SDK, score with rules or an LLM judge, test it against a captured session, deploy it and confirm scores land. | Synced from `FailproofAI/agenteye` → `evaluator-sdk/skill/` (private). Do **not** hand-edit here. |
 
 ## Install
 
@@ -90,9 +91,16 @@ skills/                         ← this repo
 ├── templates/SKILL.md          ← starter for a new skill (or use `npx skills init`)
 ├── scripts/validate-skills.py  ← frontmatter/layout validator (run before merge)
 └── skills/                     ← one self-contained folder per skill
-    └── agenteye-cli/
+    ├── agenteye-cli/
+    │   ├── SKILL.md
+    │   ├── references/commands.md
+    │   └── agents/openai.yaml
+    └── agenteye-evaluator/
         ├── SKILL.md
-        ├── references/commands.md
+        ├── references/
+        │   ├── scaffold.md
+        │   ├── sdk-api.md
+        │   └── session-data.md
         └── agents/openai.yaml
 ```
 
