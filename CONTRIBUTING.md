@@ -21,6 +21,13 @@ This repo is a **collection**: one self-contained skill per folder under
    installer copies the whole folder and nothing outside it — a shared file at
    repo root won't travel. If two skills need the same doc, each gets its own
    copy.
+4. **Keep `description` under 1024 characters.** It is the only thing deciding
+   whether an agent loads the skill, and over the limit it is **truncated, not
+   rejected** — what it loses first is the trailing `NOT for …` scope, so the
+   skill doesn't fail, it starts firing on the wrong requests. Measure it by
+   parsing the YAML rather than eyeballing the block: an indentation-strip
+   shortcut under-counts a block scalar badly. The validator now checks this
+   (and warns from 1000).
 
 Run the validator before opening a PR:
 
@@ -31,7 +38,7 @@ python3 scripts/validate-skills.py
 ## Adding a new skill
 
 1. Scaffold a `SKILL.md` — either `npx skills init skills/<your-skill>` (official
-   template) or `cp templates/SKILL.md skills/<your-skill>/SKILL.md` — and fill it in.
+   template) or `cp templates/SKILL.template.md skills/<your-skill>/SKILL.md` — and fill it in.
 2. Add any `references/` / `scripts/` / `assets/` **inside** `skills/<your-skill>/`.
 3. `python3 scripts/validate-skills.py` until clean.
 4. Add a row to the README "Skills" table.
@@ -62,8 +69,9 @@ Each one is a straight one-folder overwrite out of `FailproofAI/agenteye`
 (private), published by a manual workflow there:
 
 ```
-agenteye:cli/skill/            ──▶  skills/agenteye-cli/        (workflow: Sync agenteye-cli skill)
-agenteye:evaluator-sdk/skill/  ──▶  skills/agenteye-evaluator/  (workflow: Sync agenteye-evaluator skill)
+agenteye:cli/skill/            ──▶  skills/agenteye-cli/         (workflow: Sync agenteye-cli skill)
+agenteye:evaluator-sdk/skill/  ──▶  skills/agenteye-evaluator/   (workflow: Sync agenteye-evaluator skill)
+agenteye:python-sdk/skill/     ──▶  skills/agenteye-python-sdk/  (workflow: Sync agenteye-python-sdk skill)
 ```
 
 To change one, edit the source folder in agenteye and re-run its workflow from
