@@ -3,6 +3,10 @@
 
 Catches the silent-skip traps: SKILL.md missing / nested too deep, frontmatter
 not at the very top, missing name/description, folder name != frontmatter name.
+Also catches the silent-TRUNCATION trap: a description over DESCRIPTION_MAX_CHARS
+is cut off rather than rejected, and what it loses is the trailing scope ("NOT for
+...") that stops the skill firing on the wrong requests — so an over-long
+description doesn't fail, it misfires. Nothing else checks this.
 Also flags absolute /home/ paths that won't exist for installers.
 
 No third-party deps. Exit 0 if clean (warnings allowed), 1 on any error.
@@ -17,8 +21,83 @@ ROOT = Path(__file__).resolve().parent.parent
 SKILLS = ROOT / "skills"
 SCANNABLE = {".md", ".yaml", ".yml", ".py", ".txt", ".json", ".sql"}
 
+# An agent reads only the first DESCRIPTION_MAX_CHARS of `description:` when deciding
+# whether to load a skill. Over that it is truncated, NOT rejected.
+DESCRIPTION_MAX_CHARS = 1024
+DESCRIPTION_WARN_CHARS = 1000
+
 errors: list[str] = []
 warnings: list[str] = []
+
+
+
+
+def _description_value(fm: str) -> str | None:
+    """Return the parsed value of `description:` from a frontmatter block.
+
+    Hand-rolled on purpose: this script has no third-party deps, so PyYAML is not
+    available. Handles the block-scalar form every skill here uses
+    (`description: |-`) plus the plain inline form. Returns None if absent.
+
+    Getting this right matters: an indentation-stripping shortcut under-counts a
+    block scalar badly (it can report ~850 for a value PyYAML measures at ~1090),
+    which would pass a description that ships truncated — the exact bug this
+    check exists to catch.
+    """
+    m = re.search(r"(?m)^description:[ \t]*(\|[-+]?|>[-+]?)?[ \t]*(.*)$", fm)
+    if not m:
+        return None
+    style, inline = m.group(1), m.group(2)
+    if not style:
+        # plain inline scalar: description: some text
+        return inline.strip().strip("\"'") or None
+
+    # block scalar: collect the indented lines that follow
+    rest = fm[m.end():].lstrip("\n")
+    lines = fm[m.end():].split("\n")[1:] if fm[m.end():].startswith("\n") else fm[m.end():].split("\n")
+    body = []
+    indent = None
+    for line in lines:
+        if not line.strip():
+            body.append("")
+            continue
+        cur = len(line) - len(line.lstrip())
+        if indent is None:
+            indent = cur
+        if cur < indent:
+            break            # dedented => next key, block is over
+        body.append(line[indent:])
+    if indent is None:
+        return None
+
+    # YAML chomping: `-` strips every trailing newline, `+` keeps them all, and the
+    # bare form clips to exactly one. The difference is only a character or two —
+    # which is the whole ballgame for a check whose threshold is a character count.
+    trailing = 0
+    while body and body[-1] == "":
+        body.pop(); trailing += 1
+    chomp = style[-1] if style and style[-1] in "-+" else "clip"
+    if chomp == "+":
+        suffix = "\n" * trailing
+    elif chomp == "-":
+        suffix = ""
+    else:
+        suffix = "\n" if body else ""
+
+    if style.startswith(">"):
+        # folded: lines within a paragraph join with a space; a blank line between
+        # paragraphs folds to a SINGLE newline (not two).
+        paras, buf = [], []
+        for line in body:
+            if line == "":
+                if buf:
+                    paras.append(" ".join(buf)); buf = []
+            else:
+                buf.append(line)
+        if buf:
+            paras.append(" ".join(buf))
+        return "\n".join(paras) + suffix
+    return "\n".join(body) + suffix
 
 
 def check_skill(d: Path) -> None:
@@ -64,6 +143,19 @@ def check_skill(d: Path) -> None:
             after = fm[desc.end():]
             if not re.search(r"(?m)^\s+\S", after):
                 errors.append(f"{name}: 'description:' block is empty")
+
+        parsed = _description_value(fm)
+        if parsed:
+            n = len(parsed)
+            if n > DESCRIPTION_MAX_CHARS:
+                errors.append(
+                    f"{name}: description is {n} chars, over the {DESCRIPTION_MAX_CHARS} limit — "
+                    f"it will be SILENTLY TRUNCATED, losing the trailing scope that stops the "
+                    f"skill firing on the wrong requests. Cut {n - DESCRIPTION_MAX_CHARS} chars.")
+            elif n > DESCRIPTION_WARN_CHARS:
+                warnings.append(
+                    f"{name}: description is {n} chars, close to the {DESCRIPTION_MAX_CHARS} "
+                    f"truncation limit ({DESCRIPTION_MAX_CHARS - n} spare)")
 
 
 def scan_leakage(d: Path) -> None:

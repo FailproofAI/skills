@@ -21,6 +21,7 @@ The format is shared across agents, so one definition works everywhere.
 |---|---|---|
 | [`agenteye-cli`](skills/agenteye-cli/) | Operate an AgentEye deployment from the terminal via the `agenteye` CLI - inspect telemetry (errors, sessions, events, evals), triage alerts/incidents, manage keys/users/settings, run queries. | Synced from `FailproofAI/agenteye` → `cli/skill/` (private). Do **not** hand-edit here. |
 | [`agenteye-evaluator`](skills/agenteye-evaluator/) | Put automatic quality scores on an agent's production runs - decide which dimensions are worth scoring from real sessions, scaffold the scoring service with the `agenteye-evaluator` Python SDK, score with rules or an LLM judge, test it against a captured session, deploy it and confirm scores land. | Synced from `FailproofAI/agenteye` → `evaluator-sdk/skill/` (private). Do **not** hand-edit here. |
+| [`agenteye-python-sdk`](skills/agenteye-python-sdk/) | Make an AI agent report what it did - plan which points in the agent loop to record, write the instrumentation with the `agenteye` Python SDK, thread session/agent identity through it, and verify the events actually land. | Synced from `FailproofAI/agenteye` → `python-sdk/skill/` (private). Do **not** hand-edit here. |
 
 ## Install
 
@@ -70,8 +71,8 @@ independent real copies.
 
 > **Public-repo note:** for anyone outside the org to `npx skills add
 > FailproofAI/skills`, this repo must be **public**. If it stays private, installs
-> need auth or an internal mirror. (The `agenteye-cli` content is already scrubbed
-> safe-for-public.)
+> need auth or an internal mirror. (All three skills' content is scrubbed
+> safe-for-public — that is a standing requirement of the sync, not a one-off.)
 
 ### Troubleshooting - "installed, but my agent doesn't see it"
 - **Claude Code reads `.claude/skills/` (project) / `~/.claude/skills/` (global) - *not* `.agents/skills/`.** `.agents/skills/` is the vendor-neutral path other agents use (Codex project, Cursor, Gemini CLI, …) and where the symlink **canonical store** lives. If the skill only shows up under `~/.agents/skills/` and Claude Code ignores it, the per-agent symlink wasn't created or wasn't followed.
@@ -88,19 +89,26 @@ skills/                         ← this repo
 ├── LICENSE
 ├── CONTRIBUTING.md             ← conventions + how to add a skill
 ├── assets/                     ← banner for this README
-├── templates/SKILL.md          ← starter for a new skill (or use `npx skills init`)
+├── templates/SKILL.template.md ← starter for a new skill (or use `npx skills init`)
 ├── scripts/validate-skills.py  ← frontmatter/layout validator (run before merge)
 └── skills/                     ← one self-contained folder per skill
     ├── agenteye-cli/
     │   ├── SKILL.md
     │   ├── references/commands.md
     │   └── agents/openai.yaml
-    └── agenteye-evaluator/
+    ├── agenteye-evaluator/
+    │   ├── SKILL.md
+    │   ├── references/
+    │   │   ├── scaffold.md
+    │   │   ├── sdk-api.md
+    │   │   └── session-data.md
+    │   └── agents/openai.yaml
+    └── agenteye-python-sdk/
         ├── SKILL.md
         ├── references/
-        │   ├── scaffold.md
-        │   ├── sdk-api.md
-        │   └── session-data.md
+        │   ├── events.md
+        │   ├── install.md
+        │   └── integration.md
         └── agents/openai.yaml
 ```
 
