@@ -1,0 +1,124 @@
+name: Bump downstream submodule pointer
+
+# When this repo's main moves, push a matching gitlink bump to FailproofAI/failproofai,
+# which carries this repo as a `skills` submodule, so its pinned commit tracks this repo
+# automatically. Direct push to failproofai `main` — no PR.
+#
+# This is the mirror image of failproofai's own `bump-platform-submodule.yml`, which bumps
+# platform and agenteye whenever failproofai moves. Same direction (the submodule's source
+# pushes the bump downstream) and same mechanism — this repo is just the source this time.
+#
+# failproofai `main` is governed by the org-level `failproofai-rules` ruleset (PR + 1 review
+# required), which rejects a plain GITHUB_TOKEN push with GH013. We instead mint a token for
+# the version-bot GitHub App — a bypass actor on that ruleset — so the push is accepted.
+#
+# One-time setup on FailproofAI/skills (admin) — this repo has no Actions secrets today, so
+# until both are present every run fails at the token step:
+#   • add VERSION_BOT_APP_ID and VERSION_BOT_PRIVATE_KEY, copied from the same-named secrets
+#     already on FailproofAI/failproofai:
+#       gh secret set VERSION_BOT_APP_ID      --repo FailproofAI/skills
+#       gh secret set VERSION_BOT_PRIVATE_KEY --repo FailproofAI/skills < version-bot.pem
+# The version-bot App must also be installed on FailproofAI/failproofai with Contents: write.
+#
+# Only failproofai carries this repo today. If a second repo ever does, turn the job into a
+# matrix over the repo names the way bump-platform-submodule.yml does — nothing below is
+# specific to failproofai beyond the two `env` values and the token/checkout scoping.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# GITHUB_TOKEN only reads this repo; every write downstream uses the app token.
+permissions:
+  contents: read
+
+# Serialize so back-to-back merges produce sequential bumps, not a race that loses one.
+concurrency:
+  group: bump-failproofai-submodule
+  cancel-in-progress: false
+
+jobs:
+  bump:
+    name: Bump skills gitlink in failproofai
+    runs-on: ubuntu-latest
+    steps:
+      # Token for the version-bot GitHub App — a bypass actor on the org ruleset, so the
+      # push to failproofai main bypasses the PR requirement.
+      - name: Mint version-bot app token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.VERSION_BOT_APP_ID }}
+          private-key: ${{ secrets.VERSION_BOT_PRIVATE_KEY }}
+          # Without an explicit owner/repository, the action scopes the token to this
+          # repository, which cannot push to the downstream.
+          owner: FailproofAI
+          repositories: failproofai
+
+      - name: Checkout FailproofAI/failproofai main
+        uses: actions/checkout@v7
+        with:
+          repository: FailproofAI/failproofai
+          # Persist the app token so `git push` below bypasses the ruleset.
+          token: ${{ steps.app-token.outputs.token }}
+          ref: main
+          fetch-depth: 1
+          # Don't fetch submodule contents — we only edit the gitlink.
+          submodules: false
+
+      - name: Bump skills gitlink and push
+        env:
+          NEW_SHA: ${{ github.sha }}
+          COMMIT_SUBJECT: ${{ github.event.head_commit.message }}
+          UPSTREAM_REPO: ${{ github.repository }}
+          SUB_PATH: skills
+          DOWNSTREAM_REPO: FailproofAI/failproofai
+        run: |
+          set -euo pipefail
+
+          # Match the identity the org's other version-bot bumps commit under, so every
+          # gitlink bump across the org shows the same author.
+          git config user.name  "agenteye-bot"
+          git config user.email "agenteye-bot@users.noreply.github.com"
+
+          CURRENT_SHA=$(git ls-tree HEAD "$SUB_PATH" | awk '{print $3}')
+          if [ -z "$CURRENT_SHA" ]; then
+            echo "::error::$SUB_PATH is not a gitlink in $DOWNSTREAM_REPO main — aborting."
+            exit 1
+          fi
+          if [ "$CURRENT_SHA" = "$NEW_SHA" ]; then
+            echo "Already at $NEW_SHA — nothing to do."
+            exit 0
+          fi
+
+          # Rewrite the gitlink (mode 160000 = submodule entry) without needing the
+          # submodule contents on disk.
+          git update-index --add --cacheinfo "160000,$NEW_SHA,$SUB_PATH"
+
+          # First line via bash parameter expansion, not `printf | head -n 1`: head closes
+          # the pipe after line one, printf dies with SIGPIPE, and under `set -o pipefail`
+          # the whole step fails. Squash-merge bodies here run to several KB, so that is a
+          # live hazard, not a theoretical one.
+          SUBJECT_LINE=${COMMIT_SUBJECT:-Manual trigger}
+          SUBJECT_LINE=${SUBJECT_LINE%%$'\n'*}
+          SHORT_SHA=${NEW_SHA:0:7}
+
+          git commit -m "Bump $SUB_PATH to $SHORT_SHA" \
+                     -m "Upstream: $SUBJECT_LINE" \
+                     -m "https://github.com/$UPSTREAM_REPO/commit/$NEW_SHA"
+
+          # Race-safe push: if the downstream main moved between checkout and push, rebase
+          # the single bump commit on top and try again.
+          for attempt in 1 2 3; do
+            if git push origin main; then
+              echo "Pushed bump on attempt $attempt"
+              exit 0
+            fi
+            echo "Push failed on attempt $attempt — rebasing onto latest main"
+            git fetch origin main
+            git rebase origin/main
+          done
+
+          echo "::error::Failed to push submodule bump after 3 attempts"
+          exit 1
