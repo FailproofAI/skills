@@ -33,7 +33,6 @@ One module. Drop it in the agent's package, import it at the call sites.
 # observability.py
 import contextlib
 import contextvars
-import json
 import logging
 import traceback
 import uuid
@@ -55,29 +54,12 @@ def current_session_id() -> str | None:
     return _session_id.get(None)
 
 
-def _safe(value):
-    """Coerce a value into something json.dumps cannot choke on.
-
-    This is not defensive padding — it is the single most important line in this
-    module. An unserializable value (datetime, UUID, Decimal, set, bytes, a
-    Pydantic model) does not fail at the call site: it raises on the SDK's writer
-    thread half a second later, destroys the batch, and KILLS THE WRITER FOR THE
-    LIFE OF THE PROCESS. Every later event is silently lost. A tool that returns
-    a datetime is enough. See SKILL.md §3.
-    """
-    try:
-        return json.loads(json.dumps(value, default=str))
-    except Exception:
-        return repr(value)
-
-
 def _emit(method: str, **fields) -> None:
     """Emit an event with identity filled in from the current run.
 
-    Does not raise at the call site — but note that catching here CANNOT protect
-    you from a bad payload value, because that failure happens on another thread
-    later. That is what _safe() is for; this try/except only covers mistakes made
-    right here (a bad method name, a reserved field).
+    Unsupported payload leaves are stringified by the SDK writer. This
+    try/except covers mistakes made at the call site (a bad method name or a
+    reserved field).
     """
     sid = _session_id.get(None)
     if sid is None:
@@ -86,7 +68,7 @@ def _emit(method: str, **fields) -> None:
     try:
         getattr(agenteye.event, method)(
             session_id=sid, agent_id=_agent_id.get("main"),
-            **{k: _safe(v) for k, v in fields.items()},
+            **fields,
         )
     except Exception:
         log.exception("agenteye: failed to emit %s", method)
@@ -350,7 +332,6 @@ def test_unserializable_payload_does_not_kill_the_writer(events):
         "agent_start", "tool_use", "tool_result", "agent_end"]
 ```
 
-Without `_safe()` in the wrapper this test fails — and in production the same
-payload would have silently ended all recording for the process. `flush_now()`
-raises synchronously, so a test *can* catch what production hides. That asymmetry
-is the only reason this is testable at all.
+The awkward value is stringified by the SDK writer, and the later `agent_end`
+must still be present. Keep this test because real tool outputs frequently carry
+objects outside JSON's native type set.
