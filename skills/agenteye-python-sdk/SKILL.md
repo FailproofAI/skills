@@ -31,7 +31,7 @@ your agent calls agenteye.event.*
 about it: everything up to the `.jsonl` is yours to get right and yours to verify,
 and it is verifiable on a laptop with no server, no API key, and no network.
 
-The API is small — 13 event methods, all keyword-only. The hard parts are
+The API is small — 15 event methods, all keyword-only. The hard parts are
 **deciding where to call them** and **knowing which silences are bugs**, because
 this SDK does not raise when you get it wrong. Sections 1-3 are the plan, 4 is the
 code, 5-6 are the proof.
@@ -116,6 +116,7 @@ doesn't apply; there is no requirement to emit every type.
 | your `except` blocks | `error` | the Errors surface |
 | a policy/guard/middleware layer | `hook_triggered` / `hook_completed` | hook behaviour |
 | an approval gate or human handoff | `human_wait` / `human_input`, `human_pause`, `human_interrupt` | where runs sit waiting on people |
+| a run that suspends and resumes — waiting for a human, throttled, user-paused | `agent_pause` / `agent_resume` | a real "paused" state: the agent isn't ended, the resume isn't a new agent, and wait time is excluded from active work |
 
 If the codebase has one tool dispatcher and one LLM wrapper, you have two edit
 sites for the bulk of the value. If tool calls are scattered inline across the
@@ -154,24 +155,12 @@ Work with these; none of them raise, so none of them show up in testing.
   `AGENTEYE_ENVIRONMENT` env var. This is a favourite: everything works, in the
   wrong bucket.
 
-- **Every value you pass must be JSON-serializable. This is the one that will
-  hurt you.** Field *names* are unvalidated; field *values* are not. They are
-  serialized on a background thread ~0.5s *after* your call returned, so a
-  `datetime`, `UUID`, `Decimal`, `set`, `bytes`, or Pydantic model raises **there**
-  — where you cannot catch it. The writer thread dies, the whole batch it was in
-  is destroyed, and **every later event in that process is lost, including the
-  at-exit flush.** Nothing raises at your call site; no wrapper can catch it; the
-  process keeps serving traffic and recording nothing, forever.
-
-  A tool that returns a `datetime` is enough. Coerce at the boundary:
-
-  ```python
-  import json
-  safe = json.loads(json.dumps(value, default=str))
-  ```
-
-  The wrapper in `references/integration.md` does this for you. If you write your
-  own, do it there — not at 40 call sites.
+- **Non-JSON payload leaves are stringified.** Events are serialized on a
+  background thread. Ordinary structured JSON retains its types; unsupported
+  leaves such as `datetime`, `UUID`, `Decimal`, `set`, `bytes`, or a Pydantic
+  model are converted with `str(value)` so one awkward tool result cannot stop
+  recording. Prefer plain JSON values when downstream queries need their
+  structure; use explicit custom serialization when a string would be ambiguous.
 
 - **Field *names* are unvalidated — but only the optional ones.** Every method
   takes arbitrary `**fields` and stores them as-is, so a typo'd *optional* name
@@ -190,17 +179,18 @@ Work with these; none of them raise, so none of them show up in testing.
   be unique across every concurrent run **and across each other**: a
   `hook_completed(hook_id="x")` will happily pair with a pending
   `tool_use(tool_call_id="x")` and report a confident, wrong duration. (`input_id`
-  is the exception — it *is* scoped per session/agent.)
+  and `pause_id` are the exceptions — they *are* scoped per session/agent, so
+  `human_wait`/`human_input` and `agent_pause`/`agent_resume` can't collide.)
 
   Reusing your framework's id is safe (Anthropic and OpenAI ids are globally
   unique). Per-run counters — `call_1`, `call_2`, common in home-grown loops — are
   **not**, and the failure is a plausible wrong number attributed to the wrong
   run, not a missing one. A wrong duration is worse than a null.
 
-- **`duration_ms` is computed for you on three methods only** — `tool_result`,
-  `hook_completed`, `human_input` — from the matching earlier event. Passing it to
-  those three raises `ValueError`. Passing it to any of the other ten is
-  **silently accepted as a custom field**.
+- **`duration_ms` is computed for you on four methods only** — `tool_result`,
+  `hook_completed`, `human_input`, `agent_resume` — from the matching earlier event.
+  Passing it to those four raises `ValueError`. Passing it to any of the other
+  eleven is **silently accepted as a custom field**.
 
 - **Events are fire-and-forget.** `event.*` queues in memory and returns; a daemon
   thread writes every 0.5s, plus once at interpreter exit. A clean exit flushes.
@@ -320,3 +310,5 @@ setup and deployment are your platform's own documentation.
 
 If the files look right (§5) and the collector is running against the same
 directory, the integration is done.
+
+<!-- ci: no-op touch to exercise the skill-sync trigger (safe to remove) -->
