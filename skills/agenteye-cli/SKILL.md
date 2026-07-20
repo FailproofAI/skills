@@ -9,7 +9,7 @@ description: |-
 
   Served by the `agenteye` CLI against an AgentEye platform.
 
-  NOT for adding SDK/instrumentation to your app, debugging the collector/daemon, or unrelated dev work (why a build/CI run failed, rotating non-AgentEye secrets).
+  NOT for writing or designing an evaluator service / scoring logic (that's `agenteye-evaluator`), adding SDK/instrumentation to your app (that's `agenteye-python-sdk`), debugging the collector/daemon, or unrelated dev work (why a build/CI run failed, rotating non-AgentEye secrets).
 ---
 
 # AgentEye CLI
@@ -193,3 +193,5 @@ agenteye --json events --full --session-id run-001 --all | jq '.events[].payload
 
 When you've pulled what you need, answer the user in prose or a small table —
 don't paste raw JSON back unless they asked for it.
+
+<!-- ci: no-op touch to exercise the skill-sync trigger (safe to remove) -->
