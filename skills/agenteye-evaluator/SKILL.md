@@ -4,12 +4,12 @@ description: |-
   The way to put automatic quality scores on an AI agent's production runs — both deciding what is worth measuring and building the service that measures it. Reach for it even on vague phrasing like "I want evals" or "how do I know if my agent is any good?"
 
   Trigger when the user wants to:
-  • decide what to score — they know their agent is sometimes bad but not which dimensions to track, or want scores grounded in what their real sessions show;
+  • decide what to score — plan which dimensions to track, grounded in what real sessions show; may stop at a written plan without building anything;
   • build or change an evaluator — scaffold the scoring service, add a dimension, score with rules or an LLM judge, test it against a real captured session, deploy it and confirm scores land.
 
   Served by the `agenteye-evaluator` Python SDK, with the `agenteye` CLI supplying real session data to design against.
 
-  NOT for reading eval results that already exist or checking whether quality dropped (that's `agenteye-cli` — `agenteye evals`), instrumenting an agent with the AgentEye SDK, or alerting on scores.
+  NOT for reading eval results that already exist or checking whether quality dropped (that's `agenteye-cli` — `agenteye evals`), instrumenting an agent with the AgentEye SDK (that's `agenteye-python-sdk`), or alerting on scores.
 ---
 
 # AgentEye Evaluator
@@ -28,8 +28,14 @@ agent run ends (agent_end event)
 
 The SDK part of this is small — a decorator and two models. **The hard part is
 deciding what to score**, and only the user knows that. So most of this skill is
-about getting to a good answer with them before any code exists. Sections 1-5 are
-the design loop; 6-12 are the build.
+about getting to a good answer with them before any code exists.
+
+**Two modes.** *Plan mode* decides **what** to evaluate: work through the user's
+real logs with them, converge on 2-4 dimensions, and stop at a written **eval
+plan** — no code. It's a complete, valid endpoint — see `references/brainstorm.md`.
+*Build mode* builds or changes the evaluator that does the scoring. Sections 1-5 are
+the design loop both modes share; 6-12 are the build, and can be seeded by a plan
+that brainstorm mode produced.
 
 ## 1. Work in the repo that holds the evaluator
 
@@ -51,6 +57,10 @@ If they already have an evaluator, you're adding a dimension to working code:
 read it first and match what's there rather than rewriting it.
 
 ## 2. Interview before you write
+
+*This is the compressed design loop the build path uses. When the goal is only to
+decide what to measure — no code yet — use the fuller, collaborative procedure in
+`references/brainstorm.md` and stop at its plan.*
 
 Resist jumping to code. A skilled guess at what to measure is still a guess, and
 an evaluator that scores the wrong thing is worse than none — it produces a
@@ -318,3 +328,5 @@ existing scores from here on is the `agenteye-cli` skill's job.
 did the session emit `agent_end` (or does `@app.config` return
 `inactivity_timeout_secs`) → does the server reach your service → do the tokens
 match.
+
+<!-- ci: no-op touch to exercise the skill-sync trigger (safe to remove) -->
