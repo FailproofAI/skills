@@ -118,6 +118,7 @@ A fixed registry — you read/inspect/change existing keys, you cannot create ne
 - `settings list` — `key · value · type · updated` (secrets masked).
 - `settings schema` — `key · type · accepts · description` (what each key accepts).
 - `settings set <key> (--value V | --json-value JSON | --file f)` — exactly one value source. Unknown key → exit 6. No-op if unchanged. Server validation errors surface as `✗ <message>` (e.g. range bounds). Some keys are sensitive (signing secrets, sign-in allowlist) — confirm carefully.
+  - `allowed_sign_ins` restricts which of the organization's members may sign in; it does not grant access to anyone else. An **empty list means no restriction** (every member can sign in), so clearing it widens access rather than removing it. A non-empty list admits only matching addresses and locks out every other member. Entries are exact addresses or `*@domain.tld`; a bare `*` is rejected — use an empty list. Saving a list that does not include your own address is refused, because you could not sign in again.
 
 ## incidents
 Alert incidents; referenced by id (short ids accepted, `--show-id` shows them).
