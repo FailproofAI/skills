@@ -5,7 +5,7 @@ description: |-
 
   Trigger when the user wants to:
   • inspect agent telemetry — did agents error/fail/go flaky; sessions, events, latency, token usage, slowest models; eval/quality scores and whether quality dropped;
-  • operate the deployment — ack/assign/resolve firing alerts and incidents with notes; see who has access and change roles (e.g. make someone read-only); create or scope API keys (e.g. a CI key that only pushes events); change settings; run saved or ad-hoc ClickHouse queries.
+  • operate the deployment — ack/assign/resolve/mute/dismiss issues (alerts, reports, and audit findings) with notes; run and triage audits; see who has access and change roles (e.g. read-only); create or scope API keys (e.g. a push-only CI key); change settings; run saved or ad-hoc ClickHouse queries.
 
   Served by the `agenteye` CLI against an AgentEye platform.
 
@@ -68,10 +68,11 @@ Before real work, run `agenteye --json whoami` and react to the exit code:
 - **exit 4** → not signed in. Tell the user to run `agenteye login` (it emails a
   one-time code and prompts interactively — you can't complete it for them, and
   don't fabricate a token).
-- **base-url error / exit 2 or 3 about base-url** → the deployment URL isn't
-  set. Ask the user for their dashboard URL and pass `--base-url <url>` (or they
-  set `AGENTEYE_DASHBOARD_URL`). For a local dev stack it's usually
-  `http://localhost:3000`.
+- **base-url** → the CLI defaults to the hosted product,
+  `https://app.befailproof.ai`, so a plain `agenteye login` works out of the box.
+  Only pass `--base-url <url>` (or set `AGENTEYE_DASHBOARD_URL`) for a self-hosted
+  or dev deployment — a local dev stack is usually `http://localhost:3000`. A
+  scheme-less URL is rejected as a usage error (exit 2).
 - **exit 0** → `whoami` returns the active org slug and your permissions; trust
   that for the org name and to know what you're allowed to do before attempting a
   gated command (don't assume a particular org slug — read it from `whoami`).
@@ -101,8 +102,10 @@ ask** — don't rename-and-retry or rotate/regenerate the existing one. A
 
 State-changing commands: `keys create/update/disable/regenerate`,
 `users create/update/disable/enable`, `settings set`,
-`alerts create/update/delete/test`, the writing `incidents` subcommands
+`alerts create/update/delete/test`, the writing `issues` subcommands
 (`ack/assign/resolve/comment-add/comment-delete/subscribe/unsubscribe/open`),
+`audits create/edit/delete/run` and the finding-triage verbs
+(`ack/mute/dismiss/resolve/reopen/assign`),
 `query create/update/delete`, `agent rename/delete`, and `orgs switch`.
 Read-only commands (§5 "Observe") never need this.
 
@@ -123,7 +126,8 @@ you need a flag you don't already know.
 - `users list|show|create|update|disable|enable` — referenced by **email**.
 - `settings list|schema|set` — fixed registry; `schema` shows what each key accepts.
 - `alerts list|show|create|update|delete|test` — referenced by **name**.
-- `incidents list|count|show|ack|assign|resolve|comment-add|comment-list|comment-delete|subscribe|subscribers|unsubscribe|open` — by id (short ids accepted).
+- `issues list|count|show|ack|assign|resolve|comment-add|comment-list|comment-delete|subscribe|subscribers|unsubscribe|open` — by id (short ids accepted). **One board for everything needing attention**: alert breaches, hand-raised issues, and audit findings, told apart by a `source` of `alert` / `manual` / `audit`. (This group was called `incidents` before; the old name is gone.)
+- `audits list|show|create|edit|delete|run|runs` — scheduled sweeps, referenced by **name**; `audits findings|finding` + the triage verbs `ack|mute|dismiss|resolve|reopen|assign` act on a finding **id**. `audits run <name>` only *queues* a run (poll `audits runs <name>` for completion). See §8.
 
 **Analytics & assistant:**
 - `query list|show|create|update|delete|run|schema` — saved ClickHouse SQL + ad-hoc runner (`query run <name>` or `query run --sql "…"`); `query schema [table]` for table layout.
@@ -144,8 +148,9 @@ command (`list <kind>`, `whoami`, a `list` subcommand) before committing.
 | "how are my agents doing?", "show recent runs" | `sessions --since 24h` (add `--status error` for just failures) |
 | "are the evals / quality scores ok?", "did quality drop?" | `evals --aggregate`; drill with `evals --score <key>:..0.5` |
 | "how many events / how much traffic last week?" | `query schema` then `query run --sql "SELECT count() FROM events WHERE ts >= now() - INTERVAL 7 DAY"` |
-| "is anything on fire?", "any alerts firing / open incidents?" | `alerts list` + `incidents list` (and `incidents count`) |
-| "ack / look at / resolve that incident" | `incidents list` → `incidents show <id>` → **confirm** → `incidents ack`/`resolve <id>` |
+| "is anything on fire?", "any alerts firing / open issues?" | `alerts list` + `issues list` (and `issues count`) |
+| "ack / look at / resolve that issue" | `issues list` → `issues show <id>` → **confirm** → `issues ack`/`resolve <id>` |
+| "run an audit", "what did the audit find?", "any findings to triage?" | `audits list` → `audits run <name>` (queues) → `audits runs <name>` (wait for `succeeded`) → `audits findings --audit <name>`; triage with `audits resolve/mute/dismiss <id>` — **confirm first** |
 | "give CI / this service an API key" | `keys create <name> --add events:add` (scope to what they describe) — **state it, then create**; capture the one-time secret |
 | "who has access?", "add / remove a teammate", "make them read-only" | `users list` / `users show <email>` / `users create`/`update`/`disable` |
 | "change a setting", "what can I configure?" | `settings schema` (what's tunable) then `settings set <key> --value …` — **confirm first** |
@@ -185,8 +190,8 @@ agenteye --json events --full --session-id run-001 --all | jq '.events[].payload
   limit: **`--all --limit 1000`** (or higher). When you only need the totals, use
   `--aggregate` — it covers the whole window regardless of row caps, so it's the
   reliable cross-check that you pulled everything.
-- **Triage flow:** `incidents list` → `incidents show <id>` (read the activity
-  log) → confirm with the user → `incidents ack <id>` or `resolve <id>`.
+- **Triage flow:** `issues list` → `issues show <id>` (read the activity
+  log) → confirm with the user → `issues ack <id>` or `resolve <id>`.
 - **Investigate a regression:** `evals --aggregate` to see which score dropped →
   `evals --score helpfulness:..0.5` to list the bad runs → `events --session-id <id>`
   to see what happened inside one.
@@ -194,4 +199,29 @@ agenteye --json events --full --session-id run-001 --all | jq '.events[].payload
 When you've pulled what you need, answer the user in prose or a small table —
 don't paste raw JSON back unless they asked for it.
 
-<!-- ci: no-op touch to exercise the skill-sync trigger (safe to remove) -->
+## 8. Audits — the async sweep, and how findings become issues
+
+An **audit** is a scheduled sweep that analyses recent agent behaviour (errors,
+runaway tool loops, leaked secrets, low eval scores, …) and emits **findings**.
+Two things about the flow matter when driving it from the CLI:
+
+- **`audits run <name>` is asynchronous — it only *queues*.** A `{"queued": true}`
+  does NOT mean the run finished (the analysis can take minutes). Poll
+  `audits runs <name>` until the newest row reads `succeeded` (or `failed`) before
+  reading findings — don't assume results are ready on the call that queued them.
+  A disabled audit, or one already mid-run, refuses to queue (exit 1).
+- **Findings ARE issues — it's one bucket.** Every finding graduates to an issue
+  (`source = audit`) and carries its full content there, so the same problem shows
+  up under both `audits findings` and `issues list`. Triage is **globally
+  consistent in both directions**: `audits resolve <finding-id>` closes the linked
+  issue, and `issues resolve <issue-id>` on an audit issue resolves the finding —
+  either surface works, they never disagree. Triage a finding with
+  `audits ack|mute|dismiss|resolve|reopen <id>` (durable **mute/dismiss** suppress
+  the pattern org-wide by fingerprint; **resolve** leaves no suppression, so a true
+  recurrence reopens as new). Reads need `audits:read`, every mutation
+  `audits:write` (note: triaging a finding needs `audits:write`, not an `issues:*`
+  permission — the audit is the system of record and the issue follows it).
+
+Typical end-to-end: `audits list` → `audits run <name>` → poll `audits runs <name>`
+→ `audits findings --audit <name>` (highest priority first) → `audits finding <id>`
+for the full write-up → **confirm with the user** → `audits resolve <id>`.
