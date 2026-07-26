@@ -19,9 +19,9 @@ read their code and match it.
 
 **`pip install agenteye-evaluator` from public PyPI is not the install path.**
 The package is published only as a private release artifact — there is no PyPI
-publish step. Worse, the name is unclaimed on public PyPI (unlike `agenteye`,
-which is defensively squatted), so an unqualified install could pull a stranger's
-package. Work down this ladder and stop at the first rung that applies:
+publish step. Worse, the name is unclaimed on public PyPI, so an unqualified
+install could pull a stranger's package. Work down this ladder and stop at the
+first rung that applies:
 
 1. **Inside the AgentEye monorepo** (there's an `evaluator-sdk/` directory):
    ```bash
