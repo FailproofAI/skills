@@ -13,7 +13,8 @@ command**, **`--json` to parse**, **branch on exit codes**.
 - [users](#users)
 - [settings](#settings)
 - [alerts](#alerts)
-- [incidents](#incidents)
+- [audits](#audits)
+- [issues](#issues)
 - [query](#query)
 - [agent](#agent)
 
@@ -22,7 +23,7 @@ Set on the CLI, **before** the subcommand. Precedence: flag > env var > config f
 
 | Flag | Env var | Meaning |
 |---|---|---|
-| `--base-url <url>` | `AGENTEYE_DASHBOARD_URL` | Dashboard URL. **Required** (no default); must start with `http://`/`https://`. |
+| `--base-url <url>` | `AGENTEYE_DASHBOARD_URL` | Dashboard URL. Defaults to `https://app.befailproof.ai` (the hosted product); override for self-hosted/dev. Must start with `http://`/`https://`. |
 | `--org <slug>` | `AGENTEYE_ORG` | Active org for this command (multi-tenant override). |
 | `--token <t>` | `AGENTEYE_CLI_TOKEN` | Session token (normally from config after `login`). |
 | `--json` | `AGENTEYE_CLI_JSON` | Machine-readable JSON to stdout, nothing else. |
@@ -118,15 +119,41 @@ A fixed registry — you read/inspect/change existing keys, you cannot create ne
 - `settings list` — `key · value · type · updated` (secrets masked).
 - `settings schema` — `key · type · accepts · description` (what each key accepts).
 - `settings set <key> (--value V | --json-value JSON | --file f)` — exactly one value source. Unknown key → exit 6. No-op if unchanged. Server validation errors surface as `✗ <message>` (e.g. range bounds). Some keys are sensitive (signing secrets, sign-in allowlist) — confirm carefully.
+  - `allowed_sign_ins` restricts which of the organization's members may sign in; it does not grant access to anyone else. An **empty list means no restriction** (every member can sign in), so clearing it widens access rather than removing it. A non-empty list admits only matching addresses and locks out every other member. Entries are exact addresses or `*@domain.tld`; a bare `*` is rejected — use an empty list. Saving a list that does not include your own address is refused, because you could not sign in again.
 
-## incidents
-Alert incidents; referenced by id (short ids accepted, `--show-id` shows them).
-- `incidents list [--state firing|acknowledged|resolved] [--severity ...] [--alert-id <id>] [--limit N]`
-- `incidents count`
-- `incidents show <id>` — identity + comments + subscribers + **activity log** (read this before acting).
-- `incidents ack <id>` · `incidents assign <id> <member>` (member must be an operator) · `incidents resolve <id>` (calm confirm) · `incidents open --alert-id <id> [--severity ...]`
-- `incidents comment-add <id> <text>` · `comment-list <id>` · `comment-delete <id> <comment-id>`
-- `incidents subscribe <id>` · `unsubscribe <id>` · `subscribers <id>`
+## audits
+Scheduled sweeps over agent activity, and the **findings** they produce. Audits are referenced by **name** (UUID id also accepted); findings by **id** (short ids shown in the table, `--show-id` for the full ones).
+- `audits list [--enabled-only] [--show-id]` — `created · name · every · findings · status · last run`; disabled audits are dimmed and the footer carries the on/off split plus the open-finding total.
+- `audits show <name>` — identity + `schedule` / `scope` / `analysis` / `channels` cards. The creator and the raw `scope`/`channels` blobs live here and in `--json`, not in the list.
+- `audits create <name> [--file f] [--description ...] [--enabled|--disabled] [--schedule-interval-secs N] [--schedule-anchor ISO8601] [--window-mode fixed|since_last] [--lookback-window-secs N] [--scope JSON] [--ignore-error-type <csv>] [--llm|--no-llm] [--top-k N] [--sensitivity low|medium|high] [--channels JSON]` — everything but the name has a server default. Name collision is pre-checked (exit 2). No confirm (creating isn't destructive).
+- `audits edit <name> [--name ...] [same flags as create] [--yes]` — the server replaces the whole definition, so a flag-only edit re-sends the current audit with your change applied (needs read **and** write). Rename onto an existing name → exit 2. Confirms first.
+- `audits delete <name> [--yes]` — amber preview (naming the findings and run history that go with it) + confirm.
+- `audits run <name>` — queue a run **now**, ahead of schedule. Success means queued, not finished; a disabled audit or one already mid-run is refused with the server's explanation (exit 1). JSON `{"queued": true}`.
+- `audits runs <name> [--limit N] [--show-id]` — run history, newest first: `started · status · trigger · findings · new · took`. A failed run's `error` and each run's `stats`/`report` are in `--json` only.
+- `audits findings [--audit <name>] [--run-id <id>] [--status <csv>] [--limit N] [--offset N] [--show-id]` — the triage queue, highest priority first: `id · title · severity · status · kind · seen · last`. With no `--status` you get the live set (open + recurring); valid statuses are `open recurring resolved dismissed muted`. `--audit` takes an audit **name**.
+- `audits finding <id>` — one finding in full: identity + `analysis` (what + likely cause) + `recommendation` (do / impact / effort) + `scope` + `evidence`. Empty sections are omitted.
+- `audits ack <id> [--reason ...]` — seen, stays visible, ranked lower. No confirm.
+- `audits mute <id> [--reason ...] [--yes]` — stop surfacing this pattern in future runs (durable). Confirms first.
+- `audits dismiss <id> [--reason ...] [--yes]` — judged not worth acting on; suppressed like mute. Confirms first.
+- `audits resolve <id> [--yes]` — you fixed it. Leaves **no** suppression, so a genuine recurrence is raised as new. Confirms first.
+- `audits reopen <id>` — back to `open` **and** clears any mute/dismiss suppression. The undo for the three above.
+- `audits assign <id> --to <email>` — set the owner; the status is untouched. `--to` is required (exit 2 without it).
+
+The title column truncates to whatever width is left so the fixed columns always survive — read the full text with `audits finding <id>` or `--json`. A bad `--status`, `--window-mode`, `--sensitivity`, a non-ISO-8601 `--schedule-anchor`, or an out-of-range `--schedule-interval-secs`/`--lookback-window-secs` is rejected before any request (exit 2). `--schedule-anchor` pins the fixed UTC slot runs land on (`anchor + N * interval`), so a slow run or `audits run` can't drift the cadence; omit it on create and the server uses the next 09:00 UTC. An unknown audit name → exit 6; an unknown or malformed finding id → calm `✗ no finding …`, exit 6. Reads need `audits:read`, every mutation `audits:write`.
+
+**`audits run` is async — it only queues.** Success is `{"queued": true}`, not a finished run; the analysis can take minutes. Poll `audits runs <name>` until the newest row is `succeeded`/`failed` before reading `audits findings`, rather than assuming results exist on the call that queued them.
+
+**Findings and issues are one bucket.** Every finding graduates to an issue (`source: audit`) that stores the finding's full content, so the same problem appears under both `audits findings` and `issues list`. Triage is consistent in **both** directions and needs `audits:write` either way: `audits resolve|mute|dismiss|ack|reopen <finding-id>` mirrors onto the linked issue, and `issues resolve <issue-id>` on an audit issue mirrors back onto the finding — the two never disagree. **resolve** leaves no suppression (a genuine recurrence reopens as new); **mute/dismiss** suppress the pattern org-wide by fingerprint.
+
+## issues
+The single board for everything needing human attention — alert breaches (`source: alert`), hand-raised issues (`manual`), and audit findings (`audit`). Referenced by id (short ids accepted, `--show-id` shows them). This group was **renamed from `incidents`**; the old name no longer exists. Reads and ack/comment need `issues:read`; opening, assigning, and subscribing others need `issues:create`; resolving needs `issues:close`.
+- `issues list [--state firing|acknowledged|resolved] [--alert-id <id>] [--limit N] [--show-id]` — there is **no** `--severity` filter on this command.
+- `issues count`
+- `issues show <id>` — identity + comments + subscribers + **activity log** (read this before acting). An audit-born issue (`source: audit`) carries the full finding it graduated from and back-links to the audit/run.
+- `issues ack <id>` · `issues assign <id> --assignee <member>` (repeatable; omit to clear all assignees; each must be an operator) · `issues resolve <id>` (calm confirm). **On an audit issue these stay in sync with the finding** — resolving the issue resolves the underlying audit finding, so it can't reappear on the next run (equivalently, triage it with `audits resolve <finding-id>`; both surfaces agree).
+- `issues open --summary <text> (--title <text> | --alert-id <id>) [--title ...] [--severity ...]` — `--title` is **required** for a standalone issue (nothing to borrow a name from); with `--alert-id` it is optional and defaults to the alert's name. Missing `--title` on the standalone path → exit 2.
+- `issues comment-add <id> (--body <text> | --file <path>)` — `--file -` reads stdin; exactly one of the two · `comment-list <id>` · `comment-delete <id> <comment-id>`
+- `issues subscribe <id> [--email <addr>]` · `unsubscribe <id> [--email <addr>]` · `subscribers <id>` — `--email` defaults to you; naming someone else needs `issues:create`
 
 Malformed (non-UUID) id → calm `✗ no incident …` exit 6. Assign to a non-operator → clean 422 message.
 
