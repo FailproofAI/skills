@@ -1,6 +1,6 @@
 ---
 name: policy-author
-description: Triage `failproofai audit` findings and author failproofai policies that stop coding agents misbehaving. Use in four cases. (1) An audit just ran and its findings need turning into fixes. (2) The user describes something an agent keeps doing wrong and wants it prevented — "my agent keeps force-pushing", "it deleted my files again", "stop it committing straight to main", "how do I stop it doing X" — they are describing a problem, not asking for a policy, and may not know policies exist. (3) The user explicitly asks to write, create, or add a policy. (4) The user wants the rules in a CLAUDE.md, AGENTS.md, or system-prompt file actually enforced — "agents keep ignoring my CLAUDE.md", "make my rules file strict", "turn my instructions into enforcement". Covers enabling an existing builtin (usually the right answer) as well as writing new custom policy files.
+description: Triage audit findings and author failproofai policies that stop coding agents misbehaving. Use when: (1) a `failproofai audit` ran and its findings need turning into fixes; (2) the user describes something an agent keeps doing wrong — "my agent keeps force-pushing", "it deleted my files again", "stop it committing to main" — reporting a problem, not requesting a policy, and often unaware policies exist; (3) they explicitly ask to write or add a policy; (4) findings live in an AgentEye deployment (`agenteye` CLI), or they ask which of their policies are actually working; (5) they want the rules in a CLAUDE.md or AGENTS.md actually enforced. Covers enabling an existing builtin — usually the right answer — as well as writing new custom policy files.
 ---
 
 # Authoring failproofai policies
@@ -10,7 +10,7 @@ description: Triage `failproofai audit` findings and author failproofai policies
 > at the repo root. The `grep` anchors work either way.
 
 
-Four ways you get here. All converge on the same authoring core (§2).
+Five ways you get here. All converge on the same authoring core (§2).
 
 **1. Automatically, after an audit.** A `PostToolUse` policy fires when `failproofai audit`
 runs and instructs the agent to come here. The findings are already sitting in the cache —
@@ -25,12 +25,18 @@ and confirm at the end.
 
 **3. The user asks for a policy outright.** *"Write a policy that blocks X."* Straight to §2.
 
-**4. The user has a rules file agents keep ignoring.** *"Agents keep skipping what's in my
+**4. Findings live in AgentEye.** The org runs [AgentEye](https://app.befailproof.ai)
+and wants its findings enforced — or wants to know which of their policies are actually
+working. AgentEye sees the whole fleet, so it answers things a local audit cannot: which
+hooks are *failing* (and therefore enforcing nothing), and which are denying so often the
+rule is probably mis-scoped. **§4** has the procedure.
+
+**5. The user has a rules file agents keep ignoring.** *"Agents keep skipping what's in my
 CLAUDE.md."* Prose rules are advisory — the agent reads them (maybe) and forgets them under
 context pressure. Policies are enforcement. Extract the rules, classify what is enforceable,
 and turn that subset into policies — **§3** has the procedure and the classification table.
 
-For 2, 3 and 4, still check the audit cache if one exists — it often shows the behavior is
+For 2, 3, 4 and 5, still check the audit cache if one exists — it often shows the behavior is
 already happening and gives you real commands to use as test cases (§2.4).
 
 The single most common mistake is writing a custom policy when a builtin already covers
@@ -429,7 +435,64 @@ never converts 100%. Claiming it does means something above was misclassified.
 
 ---
 
-## 4. Reference files
+## 4. Sourcing findings from AgentEye
+
+AgentEye is the observability half: failproofai enforces inside the loop, AgentEye records
+what happened across the whole fleet. Full procedure and verified commands are in
+`references/agenteye.md` — read it before running anything. The shape:
+
+### 4.1 Preflight
+
+`agenteye whoami`. Exit 4 means not logged in, and **you cannot fix that** — login needs a
+code emailed to the user. Ask them to run `agenteye login --email <them>` and stop. Note the
+permissions it prints; they decide what you may do in §4.5. Pass `--json` to every command.
+
+### 4.2 Ask all three questions
+
+AgentEye answers three different things, and they produce different work:
+
+| Question | Command shape | Produces |
+|---|---|---|
+| What is enforceable? | `audits findings` → filter `kind == "policy"` | policies to write or builtins to enable |
+| What enforcement is **broken**? | `query run` over `hook_completed` where outcome not in (ok, approved) | **hooks failing = enforcing nothing** |
+| What is **too strict**? | same, outcome in (denied, blocked) | deny-mode rules that should be oversight |
+
+`kind: policy` is AgentEye's own classification — `improvement` and `failure` findings are
+code and instrumentation work, not yours.
+
+The middle row is the one no local audit can answer. failproofai fails open (`traps.md` §3),
+so a policy that throws returns allow and nothing surfaces locally. AgentEye records every
+hook outcome, so a failing hook is a query away — and a hook failing hundreds of times is a
+live gap that outranks any new policy you might write. Report it first.
+
+### 4.3 Get the actual commands
+
+`audits finding <id>` needs the **full UUID** from `--show-id`; the short id in the table is
+rejected, despite the CLI docs. Its `evidence.queries` are runnable and often carry the exact
+regex. For raw payloads: `events --full --session-id <id>` — `--full` is the only way to get
+`payload` and it is expensive, so always bound it to one session.
+
+If an evidence query returns nothing, do not assume the finding is wrong — say in your report
+that the policy came from the finding's description rather than observed payloads. That is a
+real difference in confidence and the user should know which one they got.
+
+### 4.4 Author as normal
+
+Straight into §2 — builtins and their params first, then mode, then filename, then test both
+directions. AgentEye changes where the work comes from, not how a policy is written.
+`agenteye list tools` is worth one call: a policy matching a tool the fleet never emits is
+dead on arrival.
+
+### 4.5 Propose the close-out; do not run it
+
+Print the `issues comment-add` and `audits resolve` commands and let the user run them.
+AgentEye's confirms **auto-skip on a non-TTY, which is how you run it**, so a wrong id
+resolves someone else's finding on a shared board with no prompt — and triage needs
+`audits:write`, which a read-only account lacks. See `references/agenteye.md`.
+
+---
+
+## 5. Reference files
 
 | File | Read it when |
 |---|---|
@@ -438,3 +501,4 @@ never converts 100%. Claiming it does means something above was misclassified.
 | `references/traps.md` | **Always.** Nine documented silent failures |
 | `references/patterns.md` | Worked examples per event type |
 | `references/rules-files.md` | Enforcing a CLAUDE.md / AGENTS.md (§3) — classification and worked examples |
+| `references/agenteye.md` | Sourcing findings from an AgentEye deployment (§4) — verified commands, gotchas, close-out |
