@@ -22,7 +22,7 @@ The format is shared across agents, so one definition works everywhere.
 | [`agenteye-cli`](skills/agenteye-cli/) | Operate an AgentEye deployment from the terminal via the `agenteye` CLI - inspect telemetry (errors, sessions, events, evals), triage alerts/incidents, manage keys/users/settings, run queries. | Synced from `FailproofAI/agenteye` → `cli/skill/` (private). Do **not** hand-edit here. |
 | [`agenteye-evaluator`](skills/agenteye-evaluator/) | Put automatic quality scores on an agent's production runs - decide which dimensions are worth scoring from real sessions, scaffold the scoring service with the `agenteye-evaluator` Python SDK, score with rules or an LLM judge, test it against a captured session, deploy it and confirm scores land. | Synced from `FailproofAI/agenteye` → `evaluator-sdk/skill/` (private). Do **not** hand-edit here. |
 | [`agenteye-python-sdk`](skills/agenteye-python-sdk/) | Make an AI agent report what it did - plan which points in the agent loop to record, write the instrumentation with the `agenteye` Python SDK, thread session/agent identity through it, and verify the events actually land. | Synced from `FailproofAI/agenteye` → `python-sdk/skill/` (private). Do **not** hand-edit here. |
-| [`policy-author`](skills/policy-author/) | Turn what agents keep doing wrong into enforcement for [failproofai](https://github.com/FailproofAI/failproofai) - triage a `failproofai audit` or an AgentEye deployment's findings, convert a CLAUDE.md/AGENTS.md into policies, or take a plain complaint ("agents keep force-pushing") and enforce it. Checks the shipped builtins and their params before writing anything, since most requests are one line of config; tests every policy it authors. | Maintained here. Not synced from anywhere - edit in this repo. |
+| [`failproofai-policy-author`](skills/failproofai-policy-author/) | Turn what agents keep doing wrong into enforcement for [failproofai](https://github.com/FailproofAI/failproofai) - triage a `failproofai audit` or an AgentEye deployment's findings, convert a CLAUDE.md/AGENTS.md into policies, or take a plain complaint ("agents keep force-pushing") and enforce it. Checks the shipped builtins and their params before writing anything, since most requests are one line of config; tests every policy it authors. | Maintained here. Not synced from anywhere - edit in this repo. |
 
 ## Install
 
@@ -111,7 +111,7 @@ skills/                         ← this repo
     │   │   ├── install.md
     │   │   └── integration.md
     │   └── agents/openai.yaml
-    └── policy-author/
+    └── failproofai-policy-author/
         ├── SKILL.md
         ├── references/
         │   ├── agenteye.md

@@ -1,5 +1,17 @@
 # Silent failure modes
 
+## Contents
+
+1. [The filename convention](#1-the-filename-convention)
+2. [`customPoliciesEnabled` is a no-op](#2-custompoliciesenabled-false-is-a-silent-no-op-does-not-disable-anything)
+3. [Everything is fail-open](#3-everything-is-fail-open)
+4. [A deny does not prove *your* deny](#4-a-deny-in-your-test-does-not-prove-your-policy-denied)
+5. [Validation is nil](#5-validation-is-essentially-nil)
+6. [Unsatisfiable Stop gates loop](#6-a-stop-gate-that-cannot-be-satisfied-loops-forever)
+7. [Builtins enabled by presence](#7-builtins-are-enabled-by-presence-not-by-a-flag)
+8. [`ctx.params` always empty](#8-ctxparams-is-always-empty-for-custom-policies)
+9. [Sanitizers block, not redact](#9-sanitizers-block-they-do-not-redact--and-deny-cannot-set-message-anyway)
+
 Every item here is a documented, already-been-hit failure where a policy looks installed and
 enforces nothing. Read this before reporting any policy as working.
 
@@ -72,7 +84,7 @@ Classified for telemetry as `module_not_found` / `syntax_error` / `runtime_error
 
 The consequence: **silence is not success.** A policy that was never loaded and a policy
 that correctly allowed an action produce identical observable behavior. This is why the
-verification step in SKILL.md §2.4 is mandatory, not optional.
+verification step in SKILL.md's *Verify it fires* is mandatory, not optional.
 
 ## 4. A deny in your test does not prove *your* policy denied
 
@@ -147,9 +159,10 @@ gh auth status 2>&1 | head -3
 **This does not generalise across projects.** A gate that loops in one repo is correct in
 another. Evaluate per project rather than carrying a verdict over.
 
-Concrete instance: the failproofai repo itself has no push credentials, so its five Stop
-gates were deliberately removed from `.failproofai/policies-config.json` after exactly this
-loop. That is a fact about that repo, not a rule about Stop gates.
+This bites in practice: a repo with no working push credentials cannot ever satisfy
+`require-push-before-stop`, so enabling it there produces an agent that denies at Stop,
+retries, and never exits. Check reachability in the project in front of you — the same gate
+is correct in a repo that can push.
 
 The same reachability rule applies to custom Stop policies — always `try/catch` external
 calls and `return allow()` on failure, so an unavailable tool degrades to letting the turn

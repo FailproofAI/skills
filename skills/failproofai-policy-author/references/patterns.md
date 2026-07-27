@@ -8,6 +8,24 @@ related rules.
 
 ---
 
+## From a complaint to something matchable
+
+A policy can only match what crosses the wire, so a complaint has to become a tool call
+first. The common ones:
+
+| What the user says | What to match on |
+|---|---|
+| "keeps force-pushing" | `Bash`, `command` =~ `git push --force` / `-f` |
+| "deleted my files" | `Bash`, `command` =~ `rm -rf` |
+| "commits straight to main" | `Bash`, `git commit` + current branch check |
+| "reads my secrets / .env" | `Read`/`Bash`, `file_path` or `command` =~ `.env` |
+| "installs junk globally" | `Bash`, `command` =~ `npm i -g`, `pip install`, … |
+| "edits generated files" | `Write`/`Edit`, `file_path` =~ lockfile / `dist/` |
+| "leaks keys into chat" | `sanitize-api-keys` + `additionalPatterns` param first; else a `PostToolUse` sanitizer (blocks the output — `message` is inert, `references/traps.md` §9) |
+
+If none fits, ask for the command they actually saw, or pull it from the audit finding's
+`examples[]`.
+
 ## Block a Bash command pattern
 
 The workhorse. Seven of the eight audit detectors are Bash-command patterns, so this shape
@@ -58,7 +76,7 @@ customPolicies.add({
 });
 ```
 
-`file_path` is canonical across all 11 CLIs — the per-CLI input maps normalize Copilot's
+`file_path` is canonical across all 12 CLIs — the per-CLI input maps normalize Copilot's
 `path`, Hermes's `path`, etc. before your policy sees it.
 
 ## Three modes — pick one deliberately

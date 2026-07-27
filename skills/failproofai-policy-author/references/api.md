@@ -1,12 +1,16 @@
 # Policy API reference
 
+## Contents
+
+- [The policy object](#the-policy-object) · [Context](#context) · [Decisions](#decisions)
+- [Events](#events) · [Filtering by tool](#filtering-by-tool)
+- [Execution model](#execution-model) · [Configuration](#configuration)
+
 > Source pointers below are paths inside the failproofai package. In a project that
 > installed it, they live under `node_modules/failproofai/`; in a source checkout,
 > at the repo root. The `grep` anchors work either way.
 
-
-Everything here is exported from `src/index.ts` (19 lines — that is the entire public
-surface):
+Everything here is exported from `src/index.ts` — that file is the entire public surface:
 
 ```ts
 export { customPolicies, getCustomHooks, clearCustomHooks } from "./hooks/custom-hooks-registry";
@@ -51,7 +55,7 @@ export interface PolicyContext {
 
 - `ctx.toolInput` holds the tool's arguments — `command` for Bash, `file_path`/`content` for
   Write, `old_string`/`new_string` for Edit, `pattern` for Grep. These keys are already
-  canonicalized across all 11 supported CLIs, so you write them once.
+  canonicalized across all 12 supported CLIs, so you write them once.
 - `ctx.session?.cwd` is the working directory.
 - `ctx.payload` is the raw hook payload if you need something not surfaced above.
 

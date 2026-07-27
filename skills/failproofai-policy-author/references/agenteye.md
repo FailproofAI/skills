@@ -58,7 +58,7 @@ The fields that matter:
 
 A real one, verbatim: *"Credential-shaped strings passed to db.query in production"*, whose
 evidence query carries `match(payload, '(AKIA[0-9A-Z]{16}|Bearer\s+[A-Za-z0-9._-]{20,})')`.
-That regex is the pattern to enforce — but **run it through §2.1 builtin-first anyway**:
+That regex is the pattern to enforce — but **run it through the builtin-first check anyway**:
 `sanitize-api-keys` and `sanitize-bearer-tokens` already cover those two shapes, so the
 answer is mostly config, and a custom policy only covers what the builtins miss.
 
@@ -173,7 +173,7 @@ reaching the board the team actually watches.
 
 ## Getting the actual commands
 
-A policy must match real input, and its tests need real payloads (§2.4). Two routes:
+A policy must match real input, and its tests need real payloads (see *Verify it fires* in SKILL.md). Two routes:
 
 ```bash
 # a) the finding's own evidence query, bounded

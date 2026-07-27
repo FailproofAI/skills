@@ -1,5 +1,5 @@
 ---
-name: policy-author
+name: failproofai-policy-author
 description: |-
   The way to turn what an agent keeps doing wrong into enforcement — failproofai policies that fire on every tool call. Reach for it on vague phrasing: "my agent keeps force-pushing", "it deleted my files again" — a complaint, not a policy request.
 
@@ -15,48 +15,54 @@ description: |-
   NOT for reading telemetry or operating an AgentEye deployment (that's `agenteye-cli`), designing evaluator scoring logic (`agenteye-evaluator`), fixing the bug an agent introduced, or repo invariants that belong in tests.
 ---
 
-# Authoring failproofai policies
+# failproofai Policies
 
-> Source pointers below are paths inside the failproofai package. In a project that
-> installed it, they live under `node_modules/failproofai/`; in a source checkout,
-> at the repo root. The `grep` anchors work either way.
+A failproofai policy is **a small JavaScript function that runs before or after every tool
+call** and returns allow, deny, or instruct. It is enforcement, not advice: it fires whether
+or not the model remembers to behave. This skill decides what is worth enforcing, then writes
+and proves it.
 
+    what went wrong  →  is a builtin enough?  →  author  →  test both ways  →  plug in
 
-Five ways you get here. All converge on the same authoring core (§2).
+Source pointers here are paths inside the failproofai package — under
+`node_modules/failproofai/` in an installed project, at the repo root in a checkout. They are
+grep anchors, not line numbers, so they survive refactors. Unusually for this collection the
+skill does read the source: failproofai's loader conventions and audit detectors are not
+documented anywhere else, and a policy that gets them wrong fails silently.
+
+Five ways you get here. All converge on the same authoring core (*The authoring core*).
 
 **1. Automatically, after an audit.** A `PostToolUse` policy fires when `failproofai audit`
 runs and instructs the agent to come here. The findings are already sitting in the cache —
-**start at §1** and triage them. This is the primary path: the audit knows what went wrong,
+**start at *Triage an audit*** and triage them. This is the primary path: the audit knows what went wrong,
 so it should not be on the user to notice and ask.
 
 **2. The user describes a problem.** *"My agent keeps force-pushing."* *"It deleted my files
 again."* *"How do I stop it committing to main?"* They are reporting a failure, not
 requesting a policy — most users do not know policies exist. Translate the complaint into a
-rule, then **go to §2**. Do not make them specify events or tools; infer from the behavior
+rule, then **go to *The authoring core***. Do not make them specify events or tools; infer from the behavior
 and confirm at the end.
 
-**3. The user asks for a policy outright.** *"Write a policy that blocks X."* Straight to §2.
+**3. The user asks for a policy outright.** *"Write a policy that blocks X."* Straight to *The authoring core*.
 
 **4. Findings live in AgentEye.** The org runs [AgentEye](https://app.befailproof.ai)
 and wants its findings enforced — or wants to know which of their policies are actually
 working. AgentEye sees the whole fleet, so it answers things a local audit cannot: which
 hooks are *failing* (and therefore enforcing nothing), and which are denying so often the
-rule is probably mis-scoped. **§4** has the procedure.
+rule is probably mis-scoped. ***Sourcing findings from AgentEye*** has the procedure.
 
 **5. The user has a rules file agents keep ignoring.** *"Agents keep skipping what's in my
 CLAUDE.md."* Prose rules are advisory — the agent reads them (maybe) and forgets them under
 context pressure. Policies are enforcement. Extract the rules, classify what is enforceable,
-and turn that subset into policies — **§3** has the procedure and the classification table.
+and turn that subset into policies — ***Enforcing a rules file*** has the procedure and the classification table.
 
 For 2, 3, 4 and 5, still check the audit cache if one exists — it often shows the behavior is
-already happening and gives you real commands to use as test cases (§2.4).
+already happening and gives you real commands to use as test cases (*Verify it fires*).
 
 The single most common mistake is writing a custom policy when a builtin already covers
 the case and just needs enabling. Always check coverage before authoring.
 
----
-
-## 1. Audit-driven triage
+## Audit-driven triage
 
 **One finding, or all of them?** If the user names a single finding — by its policy name
 (`git-commit-no-verify`), by description ("the one about `--no-verify`"), or by pointing at
@@ -65,24 +71,24 @@ a row in the dashboard — do **not** run the full triage. Handle just that one:
 1. Look it up in the cache by name, or by matching its `displayTitle` / `examples[]`
    against what they described.
 2. Read its `examples[]`. These are **real commands from their machine** — the single most
-   valuable thing the audit gives you. They become the should-fire cases in §2.4 (should-deny
+   valuable thing the audit gives you. They become the should-fire cases in *Verify it fires* (should-deny
    for a block-mode policy, should-instruct for oversight), which means the finished policy
    is proven against what actually happened rather than against invented input.
-3. Pick the mode from the finding's severity class (§2's mode table): deny-class findings
+3. Pick the mode from the finding's severity class (*The authoring core*'s mode table): deny-class findings
    get `deny()`, warn-class get `instruct()` oversight. **State the choice in one line and
    offer the other mode** — "went with oversight since this has legitimate uses; say the
    word for a hard block." The user asked for enforcement; which flavor is their call.
-4. Check whether a builtin covers it (§2.1). If yes and it is off, that is a config line,
+4. Check whether a builtin covers it (*Check the builtins first*). If yes and it is off, that is a config line,
    not a policy.
-5. Otherwise author it (§2), test against those examples, report back.
+5. Otherwise author it (*The authoring core*), test against those examples, report back.
 
 Mention what else is unaddressed in one line at the end — do not expand into a full triage
 they did not ask for.
 
-Only run the full §1.1–1.4 sweep when they ask broadly: "what should I do about my audit",
+Only run the full the full triage below sweep when they ask broadly: "what should I do about my audit",
 "harden this repo", "fix these findings".
 
-### 1.1 Read the findings
+### Read the findings
 
 There is **no machine-readable output flag**. `RunAuditOptions` declares `--json`, `--since`,
 `--cli`, `--project`, `--limit` and more, but `runAuditCli` parses only `--help` — every
@@ -97,9 +103,9 @@ cat ~/.failproofai/audit-dashboard.json
 trusting anything in it:
 
 ```bash
-bun -e 'const j = await Bun.file(process.env.HOME + "/.failproofai/audit-dashboard.json").json();
-const age = (Date.now() - Date.parse(j.cachedAt)) / 86400000;
-console.log(`cached ${j.cachedAt} (${age.toFixed(1)} days ago), ${j.result.results.length} findings`);'
+node -e 'const j=require(process.env.HOME+"/.failproofai/audit-dashboard.json");
+const age=(Date.now()-Date.parse(j.cachedAt))/864e5;
+console.log(`cached ${j.cachedAt} (${age.toFixed(1)} days ago), ${j.result.results.length} findings`)'
 ```
 
 More than a day or two old and the findings describe past behavior, not current — say so
@@ -114,8 +120,8 @@ server starts, so a timeout gets you fresh data without leaving a server running
 timeout 180 failproofai audit >/dev/null 2>&1 || true   # exits 124; cache is written
 ```
 
-Do that only when the user has asked for fresh findings — it can take minutes on a large
-history (423 transcripts took ~50s here) and it opens a browser tab.
+Do that only when the user has asked for fresh findings — it can take minutes on a long
+history and it opens a browser tab.
 
 If the file does not exist at all, the user has never run an audit. Ask them to, rather than
 running it for them.
@@ -125,9 +131,9 @@ running it for them.
 not `.results[]`:
 
 ```bash
-bun -e 'const j = await Bun.file(process.env.HOME + "/.failproofai/audit-dashboard.json").json();
+node -e 'const j=require(process.env.HOME+"/.failproofai/audit-dashboard.json");
 for (const c of j.result.results.sort((a,b)=>b.hits-a.hits))
-  console.log([c.name.replace("failproofai/",""), c.source, c.hits, c.projects, c.enabledInConfig].join(" | "));'
+  console.log([c.name.replace("failproofai/",""),c.source,c.hits,c.projects,c.enabledInConfig].join(" | "))'
 ```
 
 Each entry in `.result.results[]` is an `AuditCount`. The fields that matter for triage:
@@ -137,13 +143,12 @@ Each entry in `.result.results[]` is an `AuditCount`. The fields that matter for
 | `name` | Builtins are **canonical-prefixed** (`failproofai/block-rm-rf`); detectors are bare. Strip the prefix before matching against config |
 | `source` | `"builtin"` = a real policy that *would have* fired; `"audit-detector"` = audit-only pattern |
 | `hits`, `projects` | How much this actually happens — prioritize by this |
-| `examples[]` | **Real payloads from this machine.** These become your test cases in §2.4 |
+| `examples[]` | **Real payloads the agent actually produced.** These become your test cases |
 | `enabledInConfig` | **Do not trust this** — see below. Always `false` for detectors |
 
 **`enabledInConfig` is a stale snapshot.** It records the merged config as it was *at audit
-time*, and the cache persists indefinitely. Observed on this machine: the audit cached at
-20:14 reported all 39 builtins enabled; the global config was emptied at 20:19, five minutes
-later. Every finding still claims `enabledInConfig: true`.
+time*, and the cache persists indefinitely — so a config emptied minutes after a run leaves
+every finding still claiming `enabledInConfig: true`. Observed exactly that way in practice.
 
 Always re-read the current config before classifying:
 
@@ -160,7 +165,7 @@ project-scope config protects only one. If findings span many projects and enfor
 in a single project config, the honest conclusion is that most of those hits are still
 unprotected — and the fix belongs in the **global** config, not a project one.
 
-### 1.2 Sort every finding into one of three buckets
+### Sort every finding into one of three buckets
 
 **Bucket A — a builtin covers it and is off.** Do not write code. Add the short name to
 `enabledPolicies` in `.failproofai/policies-config.json`. This is the cheapest and most
@@ -169,9 +174,9 @@ maintainable fix, and it is the right answer for most `source: "builtin"` findin
 **Bucket B — a builtin covers it and is already on.** No action. Report it so the user knows
 the finding is historical, not ongoing.
 
-**Bucket C — nothing genuinely covers it.** Author a custom policy (§2).
+**Bucket C — nothing genuinely covers it.** Author a custom policy (*The authoring core*).
 
-### 1.3 Do not trust `DETECTOR_TO_POLICY`
+### Do not trust `DETECTOR_TO_POLICY`
 
 `src/audit/findings.ts`, grep `DETECTOR_TO_POLICY` maps every audit-only detector to some builtin, and its own
 header comment explains why: so that "every finding looks like it has a failproofai fix."
@@ -190,7 +195,7 @@ Several of those mappings do not actually prevent the behavior. Judge coverage y
 
 So most audit-only detectors are Bucket C. That is the gap this skill exists to fill.
 
-### 1.4 Present the triage before acting
+### Present the triage before acting
 
 Show the user the three buckets with hit counts, then act. For Bucket A, propose the
 config diff rather than silently editing — enabling enforcement changes what their agent is
@@ -212,25 +217,14 @@ right about what should happen is not authorization to make it happen.
 Project-scope edits inside the repo the user is working in are fine when they asked for a
 fix. The line is **scope**: their repo, yes; their machine, ask first.
 
----
-
-## 2. The authoring core
+## The authoring core
 
 **Arriving from a complaint?** Translate it into a concrete tool call first — a policy can
-only match what actually crosses the wire. Common mappings:
-
-| What the user says | What to match on |
-|---|---|
-| "keeps force-pushing" | `Bash`, `command` =~ `git push --force` / `-f` |
-| "deleted my files" | `Bash`, `command` =~ `rm -rf` |
-| "commits straight to main" | `Bash`, `git commit` + current branch check |
-| "reads my secrets / .env" | `Read`/`Bash`, `file_path` or `command` =~ `.env` |
-| "installs junk globally" | `Bash`, `command` =~ `npm i -g`, `pip install`, … |
-| "edits generated files" | `Write`/`Edit`, `file_path` =~ lockfile / `dist/` |
-| "leaks keys into chat" | `sanitize-api-keys` + `additionalPatterns` param first; else a `PostToolUse` sanitizer (blocks the output — `message` is inert, `traps.md` §9) |
+only match what actually crosses the wire. `references/patterns.md` has a mapping table for
+the common complaints (force-push, deletion, secrets, generated files).
 
 If the mapping is not obvious, ask for the command they actually saw, or pull it from the
-audit cache — `examples[]` holds real invocations and doubles as your test cases (§2.4).
+audit cache — `examples[]` holds real invocations and doubles as your test cases (*Verify it fires*).
 
 Two judgment calls to make before writing, and to state back to the user at the end:
 
@@ -240,14 +234,14 @@ Two judgment calls to make before writing, and to state back to the user at the 
   |---|---|---|---|
   | block | `deny()` | `block-*` | irreversible, no legitimate use |
   | **oversight** | `instruct()` | `warn-*` | risky but sometimes right — *"STOP: … Confirm with the user before executing."* |
-  | sanitize | raw deny object (blocks output; `message` inert — traps.md §9) | `sanitize-*` | secrets in tool output |
+  | sanitize | raw deny object (blocks output; `message` inert — references/traps.md §9) | `sanitize-*` | secrets in tool output |
 
   Default to **oversight** when the action has any legitimate use. Blocking those just gets
-  the policy disabled. See `patterns.md` for the exact voice the builtins use — copy it.
+  the policy disabled. See `references/patterns.md` for the exact voice the builtins use — copy it.
 - **Scope.** Project config protects one repo; user scope (`~/.failproofai/policies/`)
   applies everywhere. "My agent keeps doing X" usually means *everywhere*, not *here*.
 
-### 2.1 Check the builtins first
+### Check the builtins first
 
 Read `references/builtins.md`. All 39 builtins with their categories, default state, events
 and parameters. If one matches, enabling it beats writing a new file every time.
@@ -260,7 +254,7 @@ read their `name`/`description` lines. Coverage is not only builtins: a hand-wri
 may already enforce exactly what you were about to author, and a duplicate means two
 policies firing on every matching event.
 
-### 2.2 Choose the event and tool
+### Choose the event and tool
 
 Read `references/api.md` for `PolicyContext`, the decision helpers, and the full event list.
 
@@ -270,7 +264,7 @@ Rules of thumb:
 - Gating the end of a turn → `Stop` (but see `references/traps.md` §6 — unsatisfiable Stop gates — before using this in
   this repo)
 
-### 2.3 Write the file
+### Write the file
 
 Location: `.failproofai/policies/` in the project.
 
@@ -280,13 +274,13 @@ This is the highest-frequency failure in the whole system — see `references/tr
 
 See `references/patterns.md` for worked examples per event type.
 
-### 2.4 Verify it actually fires
+### Verify it actually fires
 
 Loading and execution are both fail-open — a broken policy is indistinguishable from a
 working one unless you test it. Never report a policy as done without this step.
 
-Use the bundled runner. `$SKILL_DIR` below is **this skill's own folder** — the
-agent harness reports it when the skill loads; substitute the real path:
+Use the bundled runner. Substitute `$SKILL_DIR` with the path to this skill's own folder —
+the directory you were told to read this file from:
 
 ```bash
 node "$SKILL_DIR/scripts/test-policy.mjs" \
@@ -312,7 +306,7 @@ node "$SKILL_DIR/scripts/test-policy.mjs" --policy <file> --cases cases.json
 With `--policy`, the file is copied into a throwaway directory that acts as both project and
 HOME — so `customPoliciesEnabled: false`, the real project config, and user-scope policies
 cannot affect the result. It also **renames the file if it violates the loader convention**
-(§2.3) and says so. Omit `--policy` to test the current directory's real config instead.
+(*Write the file*) and says so. Omit `--policy` to test the current directory's real config instead.
 
 Exit code is 1 if any `--expect` fails, so it drops straight into a script.
 
@@ -356,59 +350,52 @@ Two ways this test can lie to you:
 - **A deny does not prove *your* policy denied.** Every enabled policy sees the event, so
   another one may have fired — a rule matching nothing can hide behind a green suite. Assert
   on text unique to your policy's reason, or test with `enabledPolicies: []`. See
-  `traps.md` §4; this happens more often than it sounds.
+  `references/traps.md` *Sourcing findings from AgentEye*; this happens more often than it sounds.
 
 Use the `examples[]` from the audit finding as your should-deny cases — they are real
-commands from this machine, so they prove the policy catches what actually happened.
+commands the agent ran, so they prove the policy catches what actually happened.
 
-### 2.5 Confirm the policy is actually live
+### Confirm the policy is actually live
 
 Do **not** rely on `customPoliciesEnabled` in `.failproofai/policies-config.json` — that flag
-is a no-op and disables nothing (`traps.md` §2). The only reliable check is the one you
-already did in §2.4: run the hook and look at stdout.
+is a no-op and disables nothing (`references/traps.md` *The authoring core*). The only reliable check is the one you
+already did in *Verify it fires*: run the hook and look at stdout.
 
-What genuinely stops a policy from running: the filename convention (§2.3), a load-time
+What genuinely stops a policy from running: the filename convention (*Write the file*), a load-time
 throw, or hooks not being installed for the CLI at all. Verify with:
 
 ```bash
 failproofai policies --list
 ```
 
----
-
-## 3. Enforcing a rules file (CLAUDE.md / AGENTS.md / system prompts)
+## Enforcing a rules file (CLAUDE.md / AGENTS.md / system prompts)
 
 Prose rules are advisory: the agent reads them at session start and drops them under
 context pressure. Policies fire on every tool call regardless of what the model remembers.
 This path converts the enforceable subset of a rules file into policies — and is honest
 about the rest.
 
-### 3.1 Extract
+### Extract
 
 Read the file. Pull out every rule stated as *behavior* — quote each verbatim and note its
 section heading. Skip background prose, architecture notes, and anything descriptive.
 
-### 3.2 Classify
+### Classify
 
-Sort each rule using the table in `references/rules-files.md`. The short version:
-
-| Rule language | Class | Becomes |
-|---|---|---|
-| "never X" / "do not X" — tool-shaped | hard rule | `block-*` deny, or a builtin |
-| "always X before Y" — ordering | workflow gate | PreToolUse check **on Y** (prefer over Stop gates) |
-| "prefer X over Y" / "avoid Y" | preference | `warn-*` `instruct()` nudge |
-| "file/config must contain Z" | repo invariant | a **test in the test suite** — not a policy |
-| style, judgment, tone | unenforceable | stays prose; say so |
+Sort each rule using the classification table in `references/rules-files.md`: hard rules
+become a `block-*` deny or a builtin; ordering rules become a PreToolUse gate on the action
+they guard; preferences become a `warn-*` nudge; repo invariants belong in the **test suite**,
+not a policy; and style or judgment stays prose.
 
 Two classes here are easy to get wrong. Repo invariants ("configs must use the launcher
 form") are about file *states*, and policies see tool *calls* — recommend a test, don't
 force a policy. And workflow rules enforce best at the **action they gate** (`gh pr create`,
-`git commit`), not as Stop gates — tighter feedback, no loop risk (`traps.md` §6).
+`git commit`), not as Stop gates — tighter feedback, no loop risk (`references/traps.md` §6).
 
-### 3.3 Check coverage — builtins AND existing custom policies
+### Check coverage — builtins AND existing custom policies
 
 Rules files are exactly where hand-written policies come from, so the rule you are about to
-enforce may already be enforced. Check `references/builtins.md` (with params — §2.1), then
+enforce may already be enforced. Check `references/builtins.md` (with params — *Check the builtins first*), then
 read the project's existing custom policies:
 
 ```bash
@@ -418,20 +405,20 @@ ls .failproofai/policies/ && grep -h "name:\|description:" .failproofai/policies
 A rule already covered goes in the report as covered — writing a duplicate policy means two
 policies fire on every matching event forever.
 
-### 3.4 Present the extraction before enforcing
+### Present the extraction before enforcing
 
 Show the table — rule → class → action — before writing a batch. Turning a page of prose
 into enforcement changes what the user's agents are allowed to do everywhere in the
-project; that is a decision they confirm, not a side effect (§1.4 discipline).
+project; that is a decision they confirm, not a side effect (*Present the triage* discipline).
 
 The table is **not optional and not summarizable into prose**: even when the user
 explicitly asked you to enforce the file, your report opens with the table. It is the one
 artifact that lets them audit your classification at a glance — prose bullets hide a
 misclassified rule; a table row does not.
 
-### 3.5 Author and verify
+### Author and verify
 
-Route the uncovered enforceable subset through §2. In each generated file, cite provenance
+Route the uncovered enforceable subset through *The authoring core*. In each generated file, cite provenance
 so the policy can be traced back and re-synced when the md changes:
 
 ```js
@@ -439,27 +426,25 @@ so the policy can be traced back and re-synced when the md changes:
 // missing commits from main" (extracted 2026-07-24)
 ```
 
-### 3.6 Report the honest split
+### Report the honest split
 
 End with four lists: **enforced now** (new policies + enabled builtins), **already
 covered** (by what), **nudged** (instruct-only), **left as prose** (and why). A rules file
 never converts 100%. Claiming it does means something above was misclassified.
 
----
-
-## 4. Sourcing findings from AgentEye
+## Sourcing findings from AgentEye
 
 AgentEye is the observability half: failproofai enforces inside the loop, AgentEye records
 what happened across the whole fleet. Full procedure and verified commands are in
 `references/agenteye.md` — read it before running anything. The shape:
 
-### 4.1 Preflight
+### Preflight
 
 `agenteye whoami`. Exit 4 means not logged in, and **you cannot fix that** — login needs a
 code emailed to the user. Ask them to run `agenteye login --email <them>` and stop. Note the
-permissions it prints; they decide what you may do in §4.5. Pass `--json` to every command.
+permissions it prints; they decide what you may do when closing out. Pass `--json` to every command.
 
-### 4.2 Ask all three questions
+### Ask all three questions
 
 AgentEye answers four different things, and they produce different work:
 
@@ -468,7 +453,7 @@ AgentEye answers four different things, and they produce different work:
 | What is enforceable? | `audits findings` → filter `kind == "policy"` | policies to write or builtins to enable |
 | What enforcement is **broken**? | `query run` over `hook_completed` where outcome not in (ok, approved) | **hooks failing = enforcing nothing** |
 | What is **too strict**? | same, outcome in (denied, blocked) | deny-mode rules that should be oversight |
-| What is on the issues board? | `issues list` → branch on `source` | `audit`-born → follow to the finding; `alert` → metric breach, not policy work; `manual` → free text, classify like §3 |
+| What is on the issues board? | `issues list` → branch on `source` | `audit`-born → follow to the finding; `alert` → metric breach, not policy work; `manual` → free text, classify like *Enforcing a rules file* |
 
 `kind: policy` is AgentEye's own classification — `improvement` and `failure` findings are
 code and instrumentation work, not yours. The issues board is a **human attention queue**,
@@ -476,12 +461,12 @@ not a behaviour log: on a live deployment 0 of 11 issues were policy-actionable,
 alert fires on a number (latency, error rate, score) while a policy gates a tool call. Read
 it, classify it, and report what you skipped — do not manufacture enforcement for a metric.
 
-The middle row is the one no local audit can answer. failproofai fails open (`traps.md` §3),
+The middle row is the one no local audit can answer. failproofai fails open (`references/traps.md` *Enforcing a rules file*),
 so a policy that throws returns allow and nothing surfaces locally. AgentEye records every
 hook outcome, so a failing hook is a query away — and a hook failing hundreds of times is a
 live gap that outranks any new policy you might write. Report it first.
 
-### 4.3 Get the actual commands
+### Get the actual commands
 
 `audits finding <id>` needs the **full UUID** from `--show-id`; the short id in the table is
 rejected, despite the CLI docs. Its `evidence.queries` are runnable and often carry the exact
@@ -492,29 +477,17 @@ If an evidence query returns nothing, do not assume the finding is wrong — say
 that the policy came from the finding's description rather than observed payloads. That is a
 real difference in confidence and the user should know which one they got.
 
-### 4.4 Author as normal
+### Author as normal
 
-Straight into §2 — builtins and their params first, then mode, then filename, then test both
+Straight into *The authoring core* — builtins and their params first, then mode, then filename, then test both
 directions. AgentEye changes where the work comes from, not how a policy is written.
 `agenteye list tools` is worth one call: a policy matching a tool the fleet never emits is
 dead on arrival.
 
-### 4.5 Propose the close-out; do not run it
+### Propose the close-out; do not run it
 
 Print the `issues comment-add` and `audits resolve` commands and let the user run them.
 AgentEye's confirms **auto-skip on a non-TTY, which is how you run it**, so a wrong id
 resolves someone else's finding on a shared board with no prompt — and triage needs
 `audits:write`, which a read-only account lacks. See `references/agenteye.md`.
 
----
-
-## 5. Reference files
-
-| File | Read it when |
-|---|---|
-| `references/api.md` | Writing any policy — types, helpers, context, events |
-| `references/builtins.md` | Triaging coverage, or before authoring anything |
-| `references/traps.md` | **Always.** Nine documented silent failures |
-| `references/patterns.md` | Worked examples per event type |
-| `references/rules-files.md` | Enforcing a CLAUDE.md / AGENTS.md (§3) — classification and worked examples |
-| `references/agenteye.md` | Sourcing findings from an AgentEye deployment (§4) — verified commands, gotchas, close-out |
