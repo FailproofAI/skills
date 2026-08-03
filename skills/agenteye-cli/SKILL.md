@@ -119,6 +119,7 @@ you need a flag you don't already know.
 - `sessions` — agent runs (time/env/agent/session/status), no scores.
 - `evals` — evaluation results + scores; `--aggregate` for a health rollup; `--score key:min..max`.
 - `errors` — errored events; `--aggregate` for count / sessions / agents / last-seen.
+- `usage` — current org usage for its fixed 30-day metering window; needs `usage:read`.
 - `list <kind>` — **discover valid filter values first**: `envs agents event_types score_filters models hooks tools error_types`.
 
 **Manage (permission-gated, mutations):**
@@ -148,6 +149,7 @@ command (`list <kind>`, `whoami`, a `list` subcommand) before committing.
 | "how are my agents doing?", "show recent runs" | `sessions --since 24h` (add `--status error` for just failures) |
 | "are the evals / quality scores ok?", "did quality drop?" | `evals --aggregate`; drill with `evals --score <key>:..0.5` |
 | "how many events / how much traffic last week?" | `query schema` then `query run --sql "SELECT count() FROM events WHERE ts >= now() - INTERVAL 7 DAY"` |
+| "what has this org used this metering window?" | `usage` (or `--json usage` for the complete response) |
 | "is anything on fire?", "any alerts firing / open issues?" | `alerts list` + `issues list` (and `issues count`) |
 | "ack / look at / resolve that issue" | `issues list` → `issues show <id>` → **confirm** → `issues ack`/`resolve <id>` |
 | "run an audit", "what did the audit find?", "any findings to triage?" | `audits list` → `audits run <name>` (queues) → `audits runs <name>` (wait for `succeeded`) → `audits findings --audit <name>`; triage with `audits resolve/mute/dismiss <id>` — **confirm first** |
