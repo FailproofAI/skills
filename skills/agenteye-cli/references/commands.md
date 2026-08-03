@@ -8,7 +8,7 @@ command**, **`--json` to parse**, **branch on exit codes**.
 - [Global options](#global-options)
 - [Shared input conventions](#shared-input-conventions)
 - [Identity: login / logout / whoami / orgs](#identity)
-- [Observe: events / sessions / evals / errors / list](#observe)
+- [Observe: events / sessions / evals / errors / usage / list](#observe)
 - [keys](#keys)
 - [users](#users)
 - [settings](#settings)
@@ -89,6 +89,12 @@ scale.
 ### errors
 `agenteye errors [filters] [--all]` — errored events (time/event/env/agent/session/summary), from the light payload-free feed (`/api/events/summary`); the `summary` is the server-computed field, and `--json` rows carry no payload. For a run's raw payload use `agenteye events --full --session-id <id>`. Filters incl. `--error-type <csv>`.
 `agenteye errors --aggregate [--since 7d]` — `{total, sessions, agents, last_ts, bins}`.
+
+### usage
+`agenteye usage` — the active org's current fixed 30-day metering window, grouped for human
+reading. Needs `usage:read`. `agenteye --json usage` returns the dashboard contract unchanged:
+`org_id`, `billing_anchor`, `window`, `usage`, `calculated_at`, and `stale_after`. It has no
+filters or subcommands and is read-only; limits and enforcement are not part of this command.
 
 ### list
 `agenteye list <kind>` — discover valid filter values. Kinds: `envs agents event_types score_filters models hooks tools error_types`. JSON `{kind, values}`. Run this before filtering by a value you're unsure of.
