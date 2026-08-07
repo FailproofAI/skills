@@ -26,11 +26,31 @@ Set on the CLI, **before** the subcommand. Precedence: flag > env var > config f
 | `--base-url <url>` | `AGENTEYE_DASHBOARD_URL` | Dashboard URL. Defaults to `https://app.befailproof.ai` (the hosted product); override for self-hosted/dev. Must start with `http://`/`https://`. |
 | `--org <slug>` | `AGENTEYE_ORG` | Active org for this command (multi-tenant override). |
 | `--token <t>` | `AGENTEYE_CLI_TOKEN` | Session token (normally from config after `login`). |
+| `--api-key <k>` | `AGENTEYE_CLI_API_KEY` | Scoped API key — authenticate as a credential instead of as a signed-in user. Never saved to the config file. |
 | `--json` | `AGENTEYE_CLI_JSON` | Machine-readable JSON to stdout, nothing else. |
 | `--insecure` / `--secure` | `AGENTEYE_INSECURE` | Skip / require TLS verification (for self-signed dev certs; saved at login). |
 | `--version` | | Print version (also `agenteye version`). |
 
 Config dir honours `AGENTEYE_HOME`. Telemetry is currently disabled globally while its send path is made fully non-blocking. `AGENTEYE_ANALYTICS_DISABLED=1` and `DO_NOT_TRACK=1` remain supported opt-out controls for when telemetry is re-enabled.
+
+### Session or API key
+Exactly one credential is in play per invocation, chosen in this order:
+
+| You supply | Result |
+|---|---|
+| `--api-key` **and** `--token` | usage error, exit 2 — it never guesses |
+| `--api-key` | key mode |
+| `--token` | session mode |
+| `AGENTEYE_CLI_API_KEY` | key mode — **wins over `AGENTEYE_CLI_TOKEN`** |
+| `AGENTEYE_CLI_TOKEN` | session mode |
+| a saved session (from `login`) | session mode |
+| nothing | exit 4 |
+
+- **The key is never persisted.** A session token is saved by `login` and expires on its own; an API key is valid until someone revokes it, so the CLI keeps it out of the config file entirely. Supply it per invocation, normally via `AGENTEYE_CLI_API_KEY`.
+- **`--api-key ""` means "no override", not "fall back".** Mode stays *key*, the credential is empty, and the command exits 4 — it will not quietly use a saved session. (Same rule as `--token ""`.) An empty *environment variable* is a different story: `AGENTEYE_CLI_API_KEY=""` reads as unset and falls through to the next credential, so an unset CI variable can silently run as whichever human is logged in on that machine. Pass the flag if you need the strict behaviour.
+- **A rejected key is exit 4**, same as an expired session. Report it; don't retry and don't switch credentials.
+- **Session-only commands:** `login`, `logout`, `orgs *`, `agent *`. In key mode each exits **2** *before making any request* — there's no user to sign in or switch orgs for, and no private assistant thread to own. `keys update` also requires a signed-in user, but it fails later and differently: the request goes out and comes back **exit 5**, because re-scoping keys needs a permission that cannot be granted to a key.
+- **Name the org when using a key.** Key mode sends the org only when you supply it (`--org <slug>` / `AGENTEYE_ORG`) — it never reuses the saved active org from `login`. A key bound to one organization only ever acts on that one; a key that is not bound to a single organization falls back to the deployment's default, and you get plausible-looking data from the wrong tenant with no error and no warning. Naming the key's own org is a no-op; naming a different one is rejected. Both beat guessing.
 
 ## Shared input conventions
 - **`--json`** on any command → pure JSON on stdout (no Rich chrome). Mutations under `--json` auto-skip their confirm prompt.
@@ -44,11 +64,13 @@ Config dir honours `AGENTEYE_HOME`. Telemetry is currently disabled globally whi
 ## Identity
 
 ### login / logout / whoami
-- `agenteye login [--email you@x.com] [--org <slug>]` — emails a one-time code; on a real TTY it's a single interactive box, else a plain prompt. Saves the session to `~/.agenteye/cli.json`. **You cannot complete this for the user** (it needs the emailed code). `--org` picks the tenant at login.
-- `agenteye logout` — clears the saved session.
-- `agenteye whoami` — active org + your permissions. Run this first; exit 4 = login needed.
+- `agenteye login [--email you@x.com] [--org <slug>]` — emails a one-time code; on a real TTY it's a single interactive box, else a plain prompt. Saves the session to `~/.agenteye/cli.json`. **You cannot complete this for the user** (it needs the emailed code). `--org` picks the tenant at login. **Session-only** — exit 2 under a key.
+- `agenteye logout` — clears the saved session. **Session-only** — exit 2 under a key (a key cannot be "logged out"; revoke it instead).
+- `agenteye whoami` — active org + your permissions. Run this first; exit 4 = no usable credential.
+  **Under a key it answers a different question and still exits 0:** it reports that there is no signed-in user, names the auth mode, and gives the org it will act on. So branch on the auth mode, not on the absence of a user identity — and note that it does not prove the key is accepted or check any permission. Let the first real read do that.
 
 ### orgs
+**Session-only, the whole group** — each exits 2 under a key, with no request made. Use `--org <slug>` per command instead.
 - `orgs list` — your orgs + role in each (active marked).
 - `orgs switch [<slug>]` — change the saved active org; omit slug to pick from a list (TTY only). **State change** (mild) — affects later commands.
 - `orgs current` — identity card for the active org.
@@ -59,25 +81,25 @@ All read-only; never need confirmation.
 
 ### events
 `agenteye events [filters] [--all]` — event log, newest first. **Default is the light,
-payload-free feed** (`/api/events/summary`): rows carry `summary, is_error, error_type,
-output_tokens, context_window, context_fill` (a server-computed `summary`, no raw payload).
+payload-free feed**: rows carry `summary, is_error, error_type, output_tokens,
+context_window, context_fill` (a server-computed `summary`, no raw payload).
 `--session-id`, `--all`, and structured filters stay on this fast path. `--search` is the
 exception: responses remain payload-free, but the server must scan `payload` to match the
 free-text term, so broad searches can still be expensive. To get the raw `payload`, opt
-into the **full feed** with `--full` (or `--fields payload`) — this hits the heavy
-`/api/events`, which is slow at scale, so keep it bounded (pair `--full` with one
-`--session-id`). e.g. `agenteye --json events --full --session-id run-1 --all | jq '.events[].payload'`.
+into the **full feed** with `--full` (or `--fields payload`) — that read is slow at scale,
+so keep it bounded (pair `--full` with one `--session-id`).
+e.g. `agenteye --json events --full --session-id run-1 --all | jq '.events[].payload'`.
 Filters: `--session-id <id>` `--agent-id <id>` `--event-type <csv>` `--env <csv>` `--since <window>` / `--from`/`--to` `--search <term>` (repeatable, payload OR-match).
 
 #### Getting the raw payload
 The default `events`/`errors` reads are payload-free. Only `--full` (or `--fields payload`)
-returns the raw `payload`, and it hits the heavy `/api/events` feed — **always bound it**
-(pair with `--session-id`); an unbounded `events --full` can time out / degrade ClickHouse at
+returns the raw `payload`, and that is the heavy feed — **always bound it** (pair with
+`--session-id`); an unbounded `events --full` can time out or degrade the event store at
 scale.
 - **A whole session:** `agenteye --json events --full --session-id <SESSION_ID> --all --limit 1000 | jq '.events[].payload'`
 - **A single event:** scope to its session, then pick by id — `agenteye --json events --full --session-id <SESSION_ID> --all | jq '.events[] | select(.id == <EVENT_ID>) | .payload'`
 - **An error's payload:** two steps — `agenteye --json errors --error-type <T> --since 24h` (gives the error's `id` and `session_id`; `errors` is light-only, no payload), then `agenteye --json events --full --session-id <SESSION_ID> --all | jq '.events[] | select(.id == <ERROR_EVENT_ID>) | .payload'`
-- **Precise / by id (avoids the heavy list query):** `agenteye --json query run --sql "SELECT id, event_type, payload FROM events WHERE session_id = '<SESSION_ID>' ORDER BY ts"` — or `WHERE id = <EVENT_ID>`. Reads `payload` directly via the read-only SQL runner (`/api/queries/run`); a bounded `WHERE` is fast.
+- **Precise / by id (avoids the heavy list query):** `agenteye --json query run --sql "SELECT id, event_type, payload FROM events WHERE session_id = '<SESSION_ID>' ORDER BY ts"` — or `WHERE id = <EVENT_ID>`. Reads `payload` directly via the read-only SQL runner; a bounded `WHERE` is fast.
 
 ### sessions
 `agenteye sessions [filters] [--all]` — agent runs: time/env/agent/session/status (no scores). Filters: `--session-id --agent-id --env --status <error|...> --since`. JSON rows still carry `scores`.
@@ -87,7 +109,7 @@ scale.
 `agenteye evals --aggregate [--since 7d]` — rollup: `{total, status_counts, score_stats, timeline}` (status mix + per-metric score stats). `--score helpfulness:..0.5` = max 0.5; `helpfulness:0.8..` = min 0.8; `helpfulness:0.5..0.9` = range.
 
 ### errors
-`agenteye errors [filters] [--all]` — errored events (time/event/env/agent/session/summary), from the light payload-free feed (`/api/events/summary`); the `summary` is the server-computed field, and `--json` rows carry no payload. For a run's raw payload use `agenteye events --full --session-id <id>`. Filters incl. `--error-type <csv>`.
+`agenteye errors [filters] [--all]` — errored events (time/event/env/agent/session/summary), from the light payload-free feed; the `summary` is the server-computed field, and `--json` rows carry no payload. For a run's raw payload use `agenteye events --full --session-id <id>`. Filters incl. `--error-type <csv>`.
 `agenteye errors --aggregate [--since 7d]` — `{total, sessions, agents, last_ts, bins}`.
 
 ### usage
@@ -104,7 +126,7 @@ API keys; the secret is shown **once** on create/regenerate (capture it then). R
 - `keys list [--show-id] [--fields ...]` — active keys first, then revoked.
 - `keys show <name>`
 - `keys create <name> [--permission-set <set>] [--add <tok>] [--remove <tok>]` — permissions work **exactly like `users create`**: optionally seed from a role with `--permission-set` (`read-only`/`standard`/`admin` or a custom org set), then fine-tune with `--add`/`--remove`. Effective grants = `(set ∪ added) − removed`. For a narrowly-scoped key (the common case) just use `--add` with no set: `keys create ci-pipeline --add events:add`. Secret → stdout when piped. (There is **no** positional `PERMISSIONS` arg and **no** `-p` flag — those forms error.)
-- `keys update <name> [--permission-set <set>] [--add <tok>] [--remove <tok>]` — incremental on the key's CURRENT grants (merges --add/--remove), unless `--permission-set` is given (which reseeds, then applies --add/--remove). `--yes`/`-y` to skip confirm.
+- `keys update <name> [--permission-set <set>] [--add <tok>] [--remove <tok>]` — incremental on the key's CURRENT grants (merges --add/--remove), unless `--permission-set` is given (which reseeds, then applies --add/--remove). `--yes`/`-y` to skip confirm. **Needs a signed-in user** — under a key it reaches the server and returns **exit 5**, because `keys:update` is never assignable to a key. Every other `keys` subcommand works under a key that holds the matching grant.
 - `keys disable <name>` — revoke.
 - `keys regenerate <name>` — rotate secret (old one dies).
 
@@ -179,6 +201,8 @@ Saved ClickHouse SQL + ad-hoc runner. Saved queries referenced by **name**.
 - `query schema [TABLE]` — column layout; JSON `{schema, columns:[{table,column,type,nullable}]}`.
 
 ## agent
+**Session-only, the whole group** — each subcommand exits 2 under a key, with no request made: a chat is private to the person who owns it, and a key is not a person.
+
 Built-in assistant. Chats referenced by a **short chat-id** (first 8 hex; prefix-resolved).
 - `agent health` · `agent models` (available models for `--model`, default marked).
 - `agent chats` — `chat-id · title · messages · updated`.
