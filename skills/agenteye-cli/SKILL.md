@@ -14,9 +14,9 @@ description: |-
 
 # AgentEye CLI
 
-`agenteye` is a command-line client for an AgentEye deployment. It talks only to
-the dashboard `/api/*` over an authenticated session — you never hit the backend
-directly. Every command takes `--json`, so it's built to be driven by an agent.
+`agenteye` is a command-line client for an AgentEye deployment. It authenticates
+either as a signed-in **user** or with a scoped **API key** (§2), and every command
+takes `--json`, so it's built to be driven by an agent.
 
 ## 1. Find how to invoke it
 
@@ -42,7 +42,30 @@ Throughout this skill, `agenteye` means "whichever form you resolved."
 
 - **Global options go BEFORE the command:** `agenteye --json events`, never
   `agenteye events --json`. Globals are `--base-url`, `--org`, `--token`,
-  `--json`, `--insecure`/`--secure`. After the command they're a usage error.
+  `--api-key`, `--json`, `--insecure`/`--secure`. After the command they're a
+  usage error.
+- **Two ways to authenticate, and they are not interchangeable:**
+
+  | | How you supply it | What it is |
+  |---|---|---|
+  | **Session** | `agenteye login` (interactive; it emails a one-time code) | a signed-in **user**, carrying that person's org memberships and permissions |
+  | **API key** | `--api-key <key>`, or `AGENTEYE_CLI_API_KEY` in the environment | a scoped **credential**, carrying exactly the permissions it was granted |
+
+  A key is what you want in CI or any other non-interactive context: no browser, no
+  emailed code, nothing to expire mid-run. `AGENTEYE_CLI_API_KEY` takes precedence
+  over `AGENTEYE_CLI_TOKEN`; supplying both `--api-key` and `--token` is a usage
+  error (exit 2) rather than a silent guess about which you meant. **A key is never
+  written to the CLI's saved config** — pass it every time, from the environment.
+  `--api-key ""` means "no override" and does **not** fall back to a saved session.
+
+- **Some commands need a signed-in user.** `login`, `logout`, `orgs *` and the
+  whole `agent` group refuse a key with a usage error (**exit 2**) and make **no
+  network call at all** — there is no user to sign in, no saved active org to
+  switch, and no private assistant thread to own. `keys update` is the near miss
+  with a different signature: it *does* reach the server and comes back **exit
+  5**, because re-scoping a key needs a permission that can never be granted to a
+  key. Either way the key is not the problem to fix — plan around them rather than
+  retrying or hunting for a flag.
 - **Default to `--json` and parse it.** It prints clean JSON to stdout and
   nothing else. The plain output is a boxed Rich UI meant for human eyes — it
   burns context with box-drawing characters and is awkward to parse. Use the
@@ -57,7 +80,7 @@ Throughout this skill, `agenteye` means "whichever form you resolved."
   | 1 | unexpected / server error | report it to the user |
   | 2 | usage error (bad flags/args) | fix the command and retry |
   | 3 | can't reach the dashboard | check base-url / connectivity |
-  | 4 | not signed in / session expired | user must run `agenteye login` |
+  | 4 | no usable credential — not signed in, session expired, **or the API key was rejected** | session: user must run `agenteye login`. Key: it's missing, mistyped, disabled, or belongs to another deployment — don't retry, and don't fall back to a session |
   | 5 | authenticated but missing permission | message names the exact permission |
   | 6 | resource not found | the named resource doesn't exist |
 
@@ -65,9 +88,12 @@ Throughout this skill, `agenteye` means "whichever form you resolved."
 
 Before real work, run `agenteye --json whoami` and react to the exit code:
 
-- **exit 4** → not signed in. Tell the user to run `agenteye login` (it emails a
-  one-time code and prompts interactively — you can't complete it for them, and
-  don't fabricate a token).
+- **exit 4** → no usable credential. If the user is working from a session, tell
+  them to run `agenteye login` (it emails a one-time code and prompts
+  interactively — you can't complete it for them, and don't fabricate a token).
+  If a key was supplied, the key itself was rejected — say so and stop; logging in
+  is not the fix, and silently switching to a session would run the command as a
+  different identity than the user asked for.
 - **base-url** → the CLI defaults to the hosted product,
   `https://app.befailproof.ai`, so a plain `agenteye login` works out of the box.
   Only pass `--base-url <url>` (or set `AGENTEYE_DASHBOARD_URL`) for a self-hosted
@@ -76,11 +102,27 @@ Before real work, run `agenteye --json whoami` and react to the exit code:
 - **exit 0** → `whoami` returns the active org slug and your permissions; trust
   that for the org name and to know what you're allowed to do before attempting a
   gated command (don't assume a particular org slug — read it from `whoami`).
+- **In key mode, `whoami` answers a different question.** It still exits 0 —
+  `whoami` never errors — but it reports *how* you are authenticated rather than
+  *who* you are: there is no signed-in user, so it says so and names the auth mode
+  and the org it will act on. Read the auth mode; don't read "no user" as "not
+  authenticated" and don't try to log in on the strength of it. Since it isn't a
+  permission check either, let your first real read (`agenteye --json list envs`)
+  be what confirms the key works.
 
 **Multi-tenant:** a user can belong to several orgs; the active one is chosen at
 login. Override for a single command with the global `--org <slug>`
 (`agenteye --org acme sessions`); change the saved default with
 `agenteye orgs switch <slug>`.
+
+> ⚠️ **With a key, name the org explicitly.** A key bound to one organization only
+> ever acts on that one. But a key that is **not** bound to a single organization
+> has nothing to fall back on — key mode never reads a saved active org — so the
+> deployment resolves it to its own default, and you get **that** org's data: no
+> error, no warning, results that look perfectly valid. If you cannot tell which
+> kind of key you hold, pass `--org <slug>` (or set `AGENTEYE_ORG`) on every
+> command. Naming the org the key already belongs to is a no-op, and naming the
+> wrong one fails loudly instead of quietly — both better than guessing.
 
 ## 4. Mutations: confirm with the user FIRST
 
@@ -135,6 +177,9 @@ you need a flag you don't already know.
 - `agent health|models|chats|ask|show|rename|delete` — built-in assistant; `agent ask "…"` starts a chat, `--chat <short-id>` continues one.
 
 **Identity:** `login`, `logout`, `whoami`, `orgs {list,switch,current,perms}`, `version`, `help`.
+All of `login` / `logout` / `orgs` — like the whole `agent` group — are **session-only**:
+with a key they exit 2 without calling anything (§2). `keys update` needs a user too, but
+fails as exit 5. `whoami`, `version` and `help` work either way.
 
 ## 6. Translating plain-English requests
 
