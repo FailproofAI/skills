@@ -19,10 +19,11 @@ The format is shared across agents, so one definition works everywhere.
 
 | Skill | What it does | Source of truth |
 |---|---|---|
+| [`failproofai`](skills/failproofai/) | **Start here.** The whole product in one skill - what FailproofAI is, setting a machine up from zero (local-only or cloud-connected), the `failproofaid` daemon, moving history in with backfill/flush/capture paths, installing hooks and policies across 12 agent CLIs, local vs cloud audits, fleet and org operations, upgrade/uninstall, and troubleshooting by symptom. Routes to the specialist skills below when one owns the job, and stands alone when they aren't installed. | Maintained here. Not synced from anywhere - edit in this repo. |
 | [`agenteye-cli`](skills/agenteye-cli/) | Operate an AgentEye deployment from the terminal via the `agenteye` CLI - inspect telemetry (errors, sessions, events, evals), triage alerts/incidents, manage keys/users/settings, run queries. | Synced from `FailproofAI/agenteye` → `cli/skill/` (private). Do **not** hand-edit here. |
 | [`agenteye-evaluator`](skills/agenteye-evaluator/) | Put automatic quality scores on an agent's production runs - decide which dimensions are worth scoring from real sessions, scaffold the scoring service with the `agenteye-evaluator` Python SDK, score with rules or an LLM judge, test it against a captured session, deploy it and confirm scores land. | Synced from `FailproofAI/agenteye` → `evaluator-sdk/skill/` (private). Do **not** hand-edit here. |
 | [`agenteye-python-sdk`](skills/agenteye-python-sdk/) | Make an AI agent report what it did - plan which points in the agent loop to record, write the instrumentation with the `agenteye` Python SDK, thread session/agent identity through it, and verify the events actually land. | Synced from `FailproofAI/agenteye` → `python-sdk/skill/` (private). Do **not** hand-edit here. |
-| [`failproofai-policy-author`](skills/failproofai-policy-author/) | Turn what agents keep doing wrong into enforcement for [failproofai](https://github.com/FailproofAI/failproofai) - triage a `failproofai audit` or an AgentEye deployment's findings, convert a CLAUDE.md/AGENTS.md into policies, or take a plain complaint ("agents keep force-pushing") and enforce it. Checks the shipped builtins and their params before writing anything, since most requests are one line of config; tests every policy it authors. | Maintained here. Not synced from anywhere - edit in this repo. |
+| [`failproofai-policy-author`](skills/failproofai-policy-author/) | Turn what agents keep doing wrong into enforcement for [failproofai](https://github.com/FailproofAI/failproofai) - triage a `failproofai audit` or Failproof AI Cloud findings, convert a CLAUDE.md/AGENTS.md into policies, or take a plain complaint ("agents keep force-pushing") and enforce it. Checks the shipped builtins and their params before writing anything, since most requests are one line of config; knows which of the 12 supported agent CLIs actually enforce a given event, so it never ships a deny the harness discards; tests every policy it authors. | Maintained here. Not synced from anywhere - edit in this repo. |
 
 ## Install
 
@@ -72,7 +73,7 @@ independent real copies.
 
 > **Public-repo note:** for anyone outside the org to `npx skills add
 > FailproofAI/skills`, this repo must be **public**. If it stays private, installs
-> need auth or an internal mirror. (All three skills' content is scrubbed
+> need auth or an internal mirror. (All synced skills' content is scrubbed
 > safe-for-public — that is a standing requirement of the sync, not a one-off.)
 
 ### Troubleshooting - "installed, but my agent doesn't see it"
@@ -93,34 +94,29 @@ skills/                         ← this repo
 ├── templates/SKILL.template.md ← starter for a new skill (or use `npx skills init`)
 ├── scripts/validate-skills.py  ← frontmatter/layout validator (run before merge)
 └── skills/                     ← one self-contained folder per skill
+    ├── failproofai/             ← the umbrella: start here
+    │   ├── SKILL.md
+    │   ├── references/          ← concepts · setup · transfer · daemon · policies
+    │   │                           harnesses · audits · sessions · cloud · cli
+    │   │                           troubleshooting
+    │   └── agents/openai.yaml
+    ├── failproofai-policy-author/
+    │   ├── SKILL.md
+    │   ├── references/          ← api · builtins · cloud · harnesses · patterns
+    │   │                           rules-files · traps
+    │   ├── scripts/             ← runnable helpers (test a policy, sync a reference)
+    │   └── agents/openai.yaml
     ├── agenteye-cli/
     │   ├── SKILL.md
     │   ├── references/commands.md
     │   └── agents/openai.yaml
     ├── agenteye-evaluator/
     │   ├── SKILL.md
-    │   ├── references/
-    │   │   ├── scaffold.md
-    │   │   ├── sdk-api.md
-    │   │   └── session-data.md
+    │   ├── references/          ← brainstorm · scaffold · sdk-api · session-data
     │   └── agents/openai.yaml
-    ├── agenteye-python-sdk/
-    │   ├── SKILL.md
-    │   ├── references/
-    │   │   ├── events.md
-    │   │   ├── install.md
-    │   │   └── integration.md
-    │   └── agents/openai.yaml
-    └── failproofai-policy-author/
+    └── agenteye-python-sdk/
         ├── SKILL.md
-        ├── references/
-        │   ├── agenteye.md
-        │   ├── api.md
-        │   ├── builtins.md
-        │   ├── patterns.md
-        │   ├── rules-files.md
-        │   └── traps.md
-        ├── scripts/              ← runnable helpers (test a policy, sync a reference)
+        ├── references/          ← events · install · integration
         └── agents/openai.yaml
 ```
 
