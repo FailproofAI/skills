@@ -8,11 +8,11 @@ description: |-
   • stop a recurring behaviour, in plain words or as "write a policy that blocks X";
   • enforce a rules file — make a CLAUDE.md / AGENTS.md real instead of advisory;
   • enable an existing builtin — usually the right answer, checked before authoring;
-  • work from an AgentEye deployment — findings, plus which hooks fail or over-deny.
+  • work from Failproof AI Cloud — findings, plus which hooks fail or over-deny.
 
   Served by the `failproofai` CLI and the policy files it loads.
 
-  NOT for reading telemetry or operating an AgentEye deployment (that's `agenteye-cli`), designing evaluator scoring logic (`agenteye-evaluator`), fixing the bug an agent introduced, or repo invariants that belong in tests.
+  NOT for reading telemetry or operating Failproof AI Cloud (that's `agenteye-cli`), designing evaluator scoring logic (`agenteye-evaluator`), fixing the bug an agent introduced, or repo invariants that belong in tests.
 ---
 
 # failproofai Policies
@@ -45,11 +45,11 @@ and confirm at the end.
 
 **3. The user asks for a policy outright.** *"Write a policy that blocks X."* Straight to *The authoring core*.
 
-**4. Findings live in AgentEye.** The org runs [AgentEye](https://app.befailproof.ai)
+**4. Findings live in Failproof AI Cloud.** The org runs [Failproof AI Cloud](https://app.befailproof.ai)
 and wants its findings enforced — or wants to know which of their policies are actually
-working. AgentEye sees the whole fleet, so it answers things a local audit cannot: which
+working. Failproof AI Cloud sees the whole fleet, so it answers things a local audit cannot: which
 hooks are *failing* (and therefore enforcing nothing), and which are denying so often the
-rule is probably mis-scoped. ***Sourcing findings from AgentEye*** has the procedure.
+rule is probably mis-scoped. ***Sourcing findings from Failproof AI Cloud*** has the procedure.
 
 **5. The user has a rules file agents keep ignoring.** *"Agents keep skipping what's in my
 CLAUDE.md."* Prose rules are advisory — the agent reads them (maybe) and forgets them under
@@ -61,6 +61,76 @@ already happening and gives you real commands to use as test cases (*Verify it f
 
 The single most common mistake is writing a custom policy when a builtin already covers
 the case and just needs enabling. Always check coverage before authoring.
+
+## Establish context before you author
+
+Two things decide what the right answer is, and both are usually knowable without asking.
+Settle them first.
+
+### Which path you are on — infer it, do not ask
+
+The five entries above are not a menu to present back. Read what is already in front of you:
+
+| Already in the conversation | Path |
+|---|---|
+| A `PostToolUse` instruction that sent you here | 1 — findings are already cached; go to *Triage an audit* |
+| They named a policy, a finding, or a dashboard row | 1, **single-finding branch** — that one only, not a sweep |
+| A past-tense complaint — "keeps", "again", "it deleted my…" | 2 — translate it into a tool call |
+| "write a policy that…", an event name, a tool name | 3 |
+| `agenteye` output, an issue id, "our fleet", "in prod" | 4 |
+| A path to a CLAUDE.md / AGENTS.md, or "my rules file" | 5 |
+
+If two apply, take the more specific one and say which in a single line. Asking *"which
+of these five did you mean?"* spends a turn recovering what the transcript already says.
+
+**Carry forward what they already told you.** Mode, scope and test cases are usually
+implied rather than stated — *"it force-pushed to main and I lost work"* has already given
+you the mode (`deny()`, work was destroyed), the scope (not just this repo), and the
+should-deny case (`git push --force`). Confirm those in the closing report, not in an
+opening questionnaire.
+
+The one thing worth asking up front is the one you cannot infer and must not guess:
+**whether to change anything outside this repo** (*Never widen scope on your own initiative*).
+
+### Which harness you are authoring for
+
+failproofai supports **12 agent CLIs and they do not enforce the same events.** This is not
+a portability footnote — it decides whether the policy you are about to write does anything
+at all. A `deny()` the host discards is worse than no policy: the user believes they are
+covered. Four live examples:
+
+- **Hermes** fires `PostToolUse` but never reads the verdict — a deny there is observation
+  only, and the command still runs. Hermes has **no `Stop` event installed** at all, so a
+  Stop policy never even executes.
+- **OpenCode's `PermissionRequest` is a dead hook** — declared upstream and documented, but
+  never invoked, so the policy does not run.
+- **Goose, OpenCode and Antigravity** run `UserPromptSubmit` and throw the verdict away.
+- **Hermes and OpenClaw are user-scope only** — no project config exists to scope a rule to.
+
+`references/harnesses.md` is the full matrix — every (CLI, event) pair as **block**,
+observe, unverified, or not-installed, with the evidence for each. It is generated from
+failproofai's own `ENFORCEMENT_CAPABILITY` table, which exists precisely because this
+knowledge lived in prose once and the prose drifted: Hermes `subagent_stop` was documented
+as a working gate for months while upstream discarded its return, so every customer policy
+on that event enforced nothing. Look it up; do not recall it.
+
+Find out which CLIs are in play. These are the primary binary each integration's
+`detectInstalled()` probes (`integrations.ts`, grep `binaryExists`) — note Factory's is
+`droid` and Antigravity's is `agy`:
+
+```bash
+command -v claude codex copilot cursor-agent opencode pi hermes openclaw droid devin agy goose
+failproofai policies --list        # what is enabled — but see the caveat below
+```
+
+**`policies --list` reports install state for Claude Code only.**
+`hooksInstalledInSettings` (`manager.ts`, grep `hooksInstalledInSettings`) delegates
+unconditionally to the Claude integration, so on a Codex- or Hermes-only machine it says
+"not installed" while hooks are wired in and firing. Read that CLI's own config file before
+repeating the verdict.
+
+If several are installed, the policy must hold on all of them or you state which one it
+covers. Authoring for whichever CLI you happen to be running inside, silently, is the bug.
 
 ## Audit-driven triage
 
@@ -96,14 +166,23 @@ other argument is rejected outright (`failproofai audit --json` errors). The one
 path is the dashboard cache, which every audit run writes:
 
 ```bash
-cat ~/.failproofai/audit-dashboard.json
+cat ~/.failproofai/audit/dashboard.json
+```
+
+That is the **layout-4** path (`fp-home.ts`, grep `auditDashboardFile`). Machines that have
+not run `failproofai update` since layout 3 still keep it at the old root path, and reading
+the wrong one looks exactly like "no audit has ever run" — so fall back before concluding
+that:
+
+```bash
+cat ~/.failproofai/audit/dashboard.json 2>/dev/null || cat ~/.failproofai/audit-dashboard.json
 ```
 
 **The cache is the only source, and it can be arbitrarily old.** Check `cachedAt` before
 trusting anything in it:
 
 ```bash
-node -e 'const j=require(process.env.HOME+"/.failproofai/audit-dashboard.json");
+node -e 'const j=require(process.env.HOME+"/.failproofai/audit/dashboard.json");
 const age=(Date.now()-Date.parse(j.cachedAt))/864e5;
 console.log(`cached ${j.cachedAt} (${age.toFixed(1)} days ago), ${j.result.results.length} findings`)'
 ```
@@ -131,7 +210,7 @@ running it for them.
 not `.results[]`:
 
 ```bash
-node -e 'const j=require(process.env.HOME+"/.failproofai/audit-dashboard.json");
+node -e 'const j=require(process.env.HOME+"/.failproofai/audit/dashboard.json");
 for (const c of j.result.results.sort((a,b)=>b.hits-a.hits))
   console.log([c.name.replace("failproofai/",""),c.source,c.hits,c.projects,c.enabledInConfig].join(" | "))'
 ```
@@ -238,8 +317,18 @@ Two judgment calls to make before writing, and to state back to the user at the 
 
   Default to **oversight** when the action has any legitimate use. Blocking those just gets
   the policy disabled. See `references/patterns.md` for the exact voice the builtins use — copy it.
+
+  Both flavors are harness-dependent. `deny()` only stops something on a **block** pair
+  (*Pick an event the harness can actually enforce*), and `instruct()` is properly supported
+  only on Claude Code, Devin and Antigravity — it degrades to a stderr note on Hermes,
+  Goose, OpenClaw and Pi (`references/api.md`). Pick the mode, then confirm the pair.
 - **Scope.** Project config protects one repo; user scope (`~/.failproofai/policies/`)
   applies everywhere. "My agent keeps doing X" usually means *everywhere*, not *here*.
+
+  On **Hermes and OpenClaw there is no project scope at all** — their config is user-scope
+  only, so any rule for them is machine-wide by construction and needs asking for
+  (*Never widen scope on your own initiative*). `references/harnesses.md` lists the scopes
+  each CLI supports.
 
 ### Check the builtins first
 
@@ -254,7 +343,7 @@ read their `name`/`description` lines. Coverage is not only builtins: a hand-wri
 may already enforce exactly what you were about to author, and a duplicate means two
 policies firing on every matching event.
 
-### Choose the event and tool
+### Pick an event the harness can actually enforce
 
 Read `references/api.md` for `PolicyContext`, the decision helpers, and the full event list.
 
@@ -263,6 +352,46 @@ Rules of thumb:
 - Redacting or reacting to output → `PostToolUse`
 - Gating the end of a turn → `Stop` (but see `references/traps.md` §6 — unsatisfiable Stop gates — before using this in
   this repo)
+
+Then check the event you picked against `references/harnesses.md` for the CLIs in play
+(*Which harness you are authoring for*). The rule that falls out of that table:
+
+> **`PreToolUse` is the only event that blocks on every harness that has it.** Every other
+> event has at least one CLI where the deny is discarded.
+
+So when a rule can be expressed as a `PreToolUse` gate, express it there. The `PostToolUse`
+version of the same rule is real enforcement on Codex and Copilot and inert on the other
+ten — and "the tool already ran" is true even where it blocks, because `PostToolUse` at best
+replaces the *result* the model reads, never the side effect on disk.
+
+Three outcomes when the lookup says your event does not block:
+
+| Lookup says | Do |
+|---|---|
+| observe | Move the rule to `PreToolUse` if it can be expressed there. If it genuinely cannot (it needs the output), keep it and **say in the report that it is detection, not prevention** |
+| not-installed | The policy never runs on that CLI. Either drop that CLI from the claim or pick a different event |
+| unverified (`?`) | Do not round it up to "works". Ship it, and say enforcement is unproven on that harness |
+
+`ctx.cli` (`policy-types.ts`, grep `interface PolicyContext`) carries the CLI id if a rule
+must genuinely differ per harness — use it to narrow a rule, never to rescue a discarded
+deny. No return value makes an `observe` row enforce.
+
+### Write tool names in the canonical vocabulary
+
+Every CLI has its own names, and failproofai canonicalizes them **before** `fn` runs
+(`tool-name-canonicalize.ts`). So you write one policy, once:
+
+- Match `Bash`, `Read`, `Write`, `Edit`, `Grep`, `Glob`, `LS`, `WebFetch`, `WebSearch`.
+- Read `command`, `file_path`, `content`, `old_string`, `new_string`, `pattern`.
+
+Matching what the CLI actually sends is the mistake — Hermes' `terminal`, Copilot's
+`powershell`, Antigravity's `run_command`, OpenCode's `filePath` never reach your policy
+under those names. Per-CLI maps are in `references/harnesses.md`.
+
+The exception is tools with no canonical form: MCP tools (`mcp__*`), Skills, and anything a
+CLI added since the maps were written. Those pass through unmapped, so match them by raw
+name and expect the name to differ per CLI. `agenteye list tools` shows what a fleet
+actually emits — a policy matching a tool nobody calls is dead on arrival.
 
 ### Write the file
 
@@ -303,6 +432,24 @@ expands to the sandbox path:
 node "$SKILL_DIR/scripts/test-policy.mjs" --policy <file> --cases cases.json
 ```
 
+**Test as the CLI you are shipping to.** The hook's `--cli` flag **defaults to `claude`**
+(`bin/failproofai.mjs`, grep `--cli`), so every test above silently runs as Claude Code —
+including the ones you write for a Codex or Hermes shop. `--cli <name>` on the flag form,
+or `"cli"` on a case, runs it as that harness instead: the payload takes that CLI's shape
+and its tool names go through canonicalization, which is the only way to prove `terminal`
+or `powershell` actually reaches a policy matching `Bash`:
+
+```json
+[{ "name": "hermes: blocked at the tool gate", "cli": "hermes",
+   "event": "PreToolUse", "tool": "terminal",
+   "input": {"command":"git commit --no-verify"}, "expect": "deny" }]
+```
+
+The runner also checks each should-deny case against the capability table and marks it
+**INERT**, **NOT-INSTALLED** or **UNVERIFIED** when the harness will not act on the verdict.
+Those still count as PASS — the policy did decide deny — which is exactly why they are
+labelled. A green suite is not the claim; *the harness acts on it* is the claim.
+
 With `--policy`, the file is copied into a throwaway directory that acts as both project and
 HOME — so `customPoliciesEnabled: false`, the real project config, and user-scope policies
 cannot affect the result. It also **renames the file if it violates the loader convention**
@@ -318,7 +465,8 @@ echo '{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command"
 ```
 
 (Inside a failproofai source checkout, `node scripts/dev-hook.mjs --hook …` is the
-dev-only equivalent — `npx -y failproofai` is what every other project uses.)
+dev-only equivalent — `npx -y failproofai` is what every other project uses. Append
+`--cli <name>` to either; without it you are testing as Claude Code.)
 
 **Read stdout, not the exit code.** Both outcomes exit 0:
 
@@ -350,19 +498,20 @@ Two ways this test can lie to you:
 - **A deny does not prove *your* policy denied.** Every enabled policy sees the event, so
   another one may have fired — a rule matching nothing can hide behind a green suite. Assert
   on text unique to your policy's reason, or test with `enabledPolicies: []`. See
-  `references/traps.md` *Sourcing findings from AgentEye*; this happens more often than it sounds.
+  `references/traps.md` *Sourcing findings from Failproof AI Cloud*; this happens more often than it sounds.
 
 Use the `examples[]` from the audit finding as your should-deny cases — they are real
 commands the agent ran, so they prove the policy catches what actually happened.
 
 ### Confirm the policy is actually live
 
-Do **not** rely on `customPoliciesEnabled` in `.failproofai/policies-config.json` — that flag
-is a no-op and disables nothing (`references/traps.md` *The authoring core*). The only reliable check is the one you
-already did in *Verify it fires*: run the hook and look at stdout.
+The only reliable check is the one you already did in *Verify it fires*: run the hook and
+look at stdout. Nothing else proves it.
 
-What genuinely stops a policy from running: the filename convention (*Write the file*), a load-time
-throw, or hooks not being installed for the CLI at all. Verify with:
+What genuinely stops a policy from running: the filename convention (*Write the file*), a
+load-time throw, `customPoliciesEnabled: false` in the first scope that sets it
+(`references/traps.md` §2 — this used to be a no-op and **now actually disables** convention
+policies), or hooks not being installed for the CLI at all. Verify with:
 
 ```bash
 failproofai policies --list
@@ -432,11 +581,17 @@ End with four lists: **enforced now** (new policies + enabled builtins), **alrea
 covered** (by what), **nudged** (instruct-only), **left as prose** (and why). A rules file
 never converts 100%. Claiming it does means something above was misclassified.
 
-## Sourcing findings from AgentEye
+Name the harness the "enforced now" list is true for. If more than one CLI is installed and
+a rule lands on an event some of them only observe (*Pick an event the harness can actually
+enforce*), that rule belongs in a fifth list — **enforced on some harnesses** — with the
+CLIs named. "Enforced" with no harness attached is the claim `ENFORCEMENT_CAPABILITY` was
+written to stop people making.
 
-AgentEye is the observability half: failproofai enforces inside the loop, AgentEye records
-what happened across the whole fleet. Full procedure and verified commands are in
-`references/agenteye.md` — read it before running anything. The shape:
+## Sourcing findings from Failproof AI Cloud
+
+Failproof AI Cloud is the observability half: failproofai enforces inside the loop, the
+cloud records what happened across the whole fleet. Full procedure and verified commands
+are in `references/cloud.md` — read it before running anything. The shape:
 
 ### Preflight
 
@@ -446,7 +601,7 @@ permissions it prints; they decide what you may do when closing out. Pass `--jso
 
 ### Ask all three questions
 
-AgentEye answers four different things, and they produce different work:
+Failproof AI Cloud answers four different things, and they produce different work:
 
 | Question | Command shape | Produces |
 |---|---|---|
@@ -455,14 +610,14 @@ AgentEye answers four different things, and they produce different work:
 | What is **too strict**? | same, outcome in (denied, blocked) | deny-mode rules that should be oversight |
 | What is on the issues board? | `issues list` → branch on `source` | `audit`-born → follow to the finding; `alert` → metric breach, not policy work; `manual` → free text, classify like *Enforcing a rules file* |
 
-`kind: policy` is AgentEye's own classification — `improvement` and `failure` findings are
+`kind: policy` is Failproof AI Cloud's own classification — `improvement` and `failure` findings are
 code and instrumentation work, not yours. The issues board is a **human attention queue**,
 not a behaviour log: on a live deployment 0 of 11 issues were policy-actionable, because an
 alert fires on a number (latency, error rate, score) while a policy gates a tool call. Read
 it, classify it, and report what you skipped — do not manufacture enforcement for a metric.
 
 The middle row is the one no local audit can answer. failproofai fails open (`references/traps.md` *Enforcing a rules file*),
-so a policy that throws returns allow and nothing surfaces locally. AgentEye records every
+so a policy that throws returns allow and nothing surfaces locally. Failproof AI Cloud records every
 hook outcome, so a failing hook is a query away — and a hook failing hundreds of times is a
 live gap that outranks any new policy you might write. Report it first.
 
@@ -480,14 +635,14 @@ real difference in confidence and the user should know which one they got.
 ### Author as normal
 
 Straight into *The authoring core* — builtins and their params first, then mode, then filename, then test both
-directions. AgentEye changes where the work comes from, not how a policy is written.
+directions. Failproof AI Cloud changes where the work comes from, not how a policy is written.
 `agenteye list tools` is worth one call: a policy matching a tool the fleet never emits is
 dead on arrival.
 
 ### Propose the close-out; do not run it
 
 Print the `issues comment-add` and `audits resolve` commands and let the user run them.
-AgentEye's confirms **auto-skip on a non-TTY, which is how you run it**, so a wrong id
+Failproof AI Cloud's confirms **auto-skip on a non-TTY, which is how you run it**, so a wrong id
 resolves someone else's finding on a shared board with no prompt — and triage needs
-`audits:write`, which a read-only account lacks. See `references/agenteye.md`.
+`audits:write`, which a read-only account lacks. See `references/cloud.md`.
 

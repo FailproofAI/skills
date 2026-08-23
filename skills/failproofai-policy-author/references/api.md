@@ -119,15 +119,21 @@ the evaluator honors it), return the raw object literal.
 
 `HookEventType` — `src/hooks/types.ts`, grep `HOOK_EVENT_TYPES`. The ones worth knowing:
 
+**"Can block" is a property of the (event, CLI) pair, not of the event.** The column below
+is the best case — the harnesses where the verdict is read at all. On other CLIs the same
+event fires, your policy runs, and the deny is discarded. `references/harnesses.md` has the
+per-CLI matrix and is generated from `ENFORCEMENT_CAPABILITY`; check it before promising
+enforcement.
+
 | Event | Fires | Can block? |
 |---|---|---|
-| `PreToolUse` | Before a tool runs | **Yes** — the main enforcement point |
-| `PostToolUse` | After a tool returns | Yes — a deny blocks the whole output (see the `message` note above) |
-| `UserPromptSubmit` | On user input | Yes |
-| `Stop` | Agent about to finish its turn | Yes — deny forces another turn |
-| `SessionStart` / `SessionEnd` | Session boundaries | Observation |
-| `SubagentStop` | Subagent returns | Yes on most CLIs |
-| `PermissionRequest` / `PermissionDenied` | Permission flow | Yes |
+| `PreToolUse` | Before a tool runs | **Yes, on every CLI that has it** — the main enforcement point, and the only universal one |
+| `PostToolUse` | After a tool returns | **Only on Codex and Copilot**, and even there it replaces the *result* the model reads — the tool already ran. Observation everywhere else, Claude Code included |
+| `UserPromptSubmit` | On user input | Yes on 8 of 12; discarded on OpenCode, Antigravity and Goose; not installed on Hermes |
+| `Stop` | Agent about to finish its turn | Yes on 8 — deny forces another turn. Discarded on Pi; **not installed on Hermes or Goose**; unverified on OpenCode |
+| `SessionStart` / `SessionEnd` | Session boundaries | No — observation on every CLI that installs them (not Antigravity; `SessionEnd` also absent on Codex) |
+| `SubagentStop` | Subagent returns | Claude, Codex and Copilot only; unverified on Cursor; not installed on 5. **Discarded on Hermes, Factory and OpenClaw** — this row is the one that was wrong in prose for months |
+| `PermissionRequest` / `PermissionDenied` | Permission flow | Claude, Codex, Copilot, Devin. **OpenCode declares `permission.ask` but never invokes it** — the policy does not run |
 
 Full list also includes `PostToolUseFailure`, `StopFailure`, `Notification`,
 `SubagentStart`, `TaskCreated`, `TaskCompleted`, `PreCompact`, `PostCompact`, `FileChanged`,

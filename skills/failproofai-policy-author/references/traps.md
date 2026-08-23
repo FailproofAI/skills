@@ -3,7 +3,7 @@
 ## Contents
 
 1. [The filename convention](#1-the-filename-convention)
-2. [`customPoliciesEnabled` is a no-op](#2-custompoliciesenabled-false-is-a-silent-no-op-does-not-disable-anything)
+2. [`customPoliciesEnabled` now works, first-scope-wins](#2-custompoliciesenabled-false-now-works--and-it-resolves-first-scope-wins)
 3. [Everything is fail-open](#3-everything-is-fail-open)
 4. [A deny does not prove *your* deny](#4-a-deny-in-your-test-does-not-prove-your-policy-denied)
 5. [Validation is nil](#5-validation-is-essentially-nil)
@@ -38,36 +38,38 @@ This is not hypothetical. From the source comment at custom-hooks-loader.ts — 
 `findSkippedPolicyFiles()` (custom-hooks-loader.ts — grep findSkippedPolicyFiles)) exists solely to catch this, but its warnings go
 only to the hook log, which nobody reads. **Always check the filename before anything else.**
 
-## 2. `customPoliciesEnabled: false` is a silent no-op (does NOT disable anything)
+## 2. `customPoliciesEnabled: false` now works — and it resolves first-scope-wins
 
-The config key exists, `configure-wizard` writes it, and the loader checks it — but the
-value never reaches the loader, so **setting it to `false` has no effect**. Convention
-policies load regardless.
+**This trap has been fixed upstream. The entry stays because the old behaviour is still
+described in older notes, and because the resolution rule is itself a trap.**
 
-The break is in `readMergedHooksConfig` (`hooks-config.ts` (grep `return {` inside `readMergedHooksConfig`)), which hand-builds its
-return object from four keys and omits this one:
+For a long time this key was a silent no-op: `readMergedHooksConfig` hand-built its return
+object and omitted the key, so the loader always saw `undefined` and convention policies
+loaded regardless. That is no longer true — `hooks-config.ts` (grep `customPoliciesEnabled`)
+now propagates it, `handler.ts` passes it through, and `custom-hooks-loader.ts` (grep
+`conventionEnabled`, `opts?.customPoliciesEnabled !== false`) honours it.
+
+Verified empirically: a sandbox project with a canary policy and `"customPoliciesEnabled":
+false` produces **no output**; flipping the same config to `true` fires the canary.
+
+So a repo with this flag set to `false` is **not** enforcing its convention policies — the
+opposite of what this entry used to say. If a policy you just wrote does nothing, this is now
+a real suspect, and the loader logs
+`convention policies: DISABLED via customPoliciesEnabled:false`.
+
+**The resolution is first-scope-wins, not any-scope-wins** (`hooks-config.ts`, grep
+`customPoliciesEnabled`):
 
 ```ts
-return {
-  enabledPolicies: [...enabledSet],
-  ...(… ? { policyParams: mergedParams } : {}),
-  ...(customPoliciesPath !== undefined ? { customPoliciesPath } : {}),
-  ...(llm !== undefined ? { llm } : {}),
-};   // customPoliciesEnabled is never propagated
+project.customPoliciesEnabled ?? local.customPoliciesEnabled ?? global_.customPoliciesEnabled
 ```
 
-So `handler.ts`, grep `customPoliciesEnabled:` passes `undefined`, and `custom-hooks-loader.ts`, grep `conventionEnabled`
-(`opts?.customPoliciesEnabled !== false`) evaluates **true**, always.
-
-Verified empirically: a temp project with `"customPoliciesEnabled": false` plus a canary
-policy still fires the canary. Do not tell a user their policies are disabled because this
-flag is set — check by running the hook.
-
-The practical consequence for triage: a repo with this flag set is **still enforcing** its
-custom policies. Treat the flag as unreliable in both directions until it is fixed.
+The first scope that *sets* the key decides, and the others are never consulted. This is the
+opposite of `enabledPolicies`, which is a **union** across all three (§7). Two keys in one
+file merging by opposite rules is worth checking rather than assuming.
 
 Note the explicit `customPoliciesPath` config key is **not** gated by this flag
-(custom-hooks-loader.ts — grep customPoliciesPath)) — only convention discovery is, in intent.
+(custom-hooks-loader.ts — grep customPoliciesPath)) — only convention discovery is.
 
 ## 3. Everything is fail-open
 

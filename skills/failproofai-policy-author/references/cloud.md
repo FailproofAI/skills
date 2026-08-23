@@ -1,11 +1,11 @@
-# Sourcing policy work from AgentEye
+# Sourcing policy work from Failproof AI Cloud
 
-[AgentEye](https://app.befailproof.ai) is the observability side of the same story: failproofai
-enforces inside the agent loop, AgentEye records what happened across the fleet. Where the
-local `failproofai audit` reads one machine's transcripts, AgentEye holds every session from
+[Failproof AI Cloud](https://app.befailproof.ai) is the observability side of the same story: failproofai
+enforces inside the agent loop, Failproof AI Cloud records what happened across the fleet. Where the
+local `failproofai audit` reads one machine's transcripts, Failproof AI Cloud holds every session from
 every agent in an org — so it sees things a local audit structurally cannot.
 
-The commands here were verified against a live AgentEye deployment. Figures quoted below are
+The commands here were verified against a live Failproof AI Cloud deployment. Figures quoted below are
 illustrative of the shapes you will see, not from any particular org.
 
 ## Preflight
@@ -22,12 +22,12 @@ Add `--json` to **every** command — it prints machine-readable output and noth
 
 ## Four sources of policy work
 
-AgentEye answers four different questions. Check all four; they produce different work — and
+Failproof AI Cloud answers four different questions. Check all four; they produce different work — and
 two of them produce no policy at all, which is a result worth reporting rather than a dead end.
 
 ### 1. Findings already classified as policy-shaped
 
-AgentEye tags each finding with a `kind`. **`kind: policy` means it is enforceable** —
+Failproof AI Cloud tags each finding with a `kind`. **`kind: policy` means it is enforceable** —
 `improvement` and `failure` are code or instrumentation work and are not yours.
 
 ```bash
@@ -50,9 +50,9 @@ The fields that matter:
 | Field | Use |
 |---|---|
 | `description` / `root_cause_hypothesis` | what happened and why — the policy's rationale |
-| `recommendation` | AgentEye's own fix. Often names the mechanism ("add a pre-tool-use hook that rejects…") |
+| `recommendation` | Failproof AI Cloud's own fix. Often names the mechanism ("add a pre-tool-use hook that rejects…") |
 | `evidence.queries` | **runnable SQL, often containing the exact regex** |
-| `evidence.policy_id` | AgentEye's internal rule id, e.g. `secret.credential_in_tool_args` |
+| `evidence.policy_id` | Failproof AI Cloud's internal rule id, e.g. `secret.credential_in_tool_args` |
 | `scope` | narrows it — e.g. `{"tool": "db.query"}` |
 | `occurrences`, `evidence.matched_sessions` | how much this actually happens |
 
@@ -66,7 +66,7 @@ answer is mostly config, and a custom policy only covers what the builtins miss.
 
 **The one thing a local audit can never tell you.** failproofai fails open (`traps.md` §3):
 a policy that throws or times out returns allow, and nothing surfaces. Locally that is
-invisible. AgentEye records every hook outcome, so the gap is a query:
+invisible. Failproof AI Cloud records every hook outcome, so the gap is a query:
 
 ```bash
 agenteye --json query run --sql "
@@ -92,7 +92,7 @@ protection while quietly letting actions through.
 
 A high denial count means one of two very different things, and **the raw count cannot tell
 you which** — you must measure the *distribution across sessions* before drawing any
-conclusion. AgentEye's own finding text says denials mean an agent is "burning a turn each
+conclusion. Failproof AI Cloud's own finding text says denials mean an agent is "burning a turn each
 time", which presumes a retry loop; that is one of the two cases, not the default.
 
 | Shape | Meaning | Fix |
@@ -125,7 +125,7 @@ proposing anything.
 
 ### 4. The issues board — read it, but classify before believing it
 
-Issues are AgentEye's **human attention queue**, not a behaviour log. Three sources feed it,
+Issues are Failproof AI Cloud's **human attention queue**, not a behaviour log. Three sources feed it,
 and only one reliably contains policy work:
 
 ```bash
@@ -197,17 +197,17 @@ that is a real difference in confidence.
 ## Then: author it and plug it in
 
 From here it is §2 unchanged — **check builtins and their params first**, pick a mode, name
-the file `*policies.mjs`, test both directions with `scripts/test-policy.mjs`. AgentEye
+the file `*policies.mjs`, test both directions with `scripts/test-policy.mjs`. Failproof AI Cloud
 changes where the work comes from, not how a policy gets written.
 
-"Plugging it in" is two concrete edits in the target project, and neither touches AgentEye:
+"Plugging it in" is two concrete edits in the target project, and neither touches Failproof AI Cloud:
 
 ```
 .failproofai/policies/<name>-policies.mjs     the custom policy (filename convention — traps.md §1)
 .failproofai/policies-config.json             `enabledPolicies` for any builtin that covers a finding
 ```
 
-Nothing about this needs an AgentEye permission — a failproofai policy is a local file plus a
+Nothing about this needs a Failproof AI Cloud permission — a failproofai policy is a local file plus a
 config entry. Then prove both took effect, because neither is self-evident:
 
 ```bash
@@ -220,15 +220,15 @@ node "$SKILL_DIR/scripts/test-policy.mjs" --cwd . \
   --event PreToolUse --tool Bash --input '{"command":"sudo ls"}' --expect deny
 ```
 
-Record which AgentEye finding each policy came from, in the file itself, so the two systems
+Record which Failproof AI Cloud finding each policy came from, in the file itself, so the two systems
 stay traceable to each other:
 
 ```js
-// derived-from: AgentEye finding <full-finding-uuid>
+// derived-from: Failproof AI Cloud finding <full-finding-uuid>
 // "<the finding's title>" (org <slug>, <date extracted>)
 ```
 
-One extra step worth taking: AgentEye knows which tools actually exist in the fleet.
+One extra step worth taking: Failproof AI Cloud knows which tools actually exist in the fleet.
 
 ```bash
 agenteye --json list tools      # also: agents, envs, event_types, hooks, error_types
@@ -263,7 +263,7 @@ mirrors onto the other.
 
 ## What to report
 
-Same honest split as everywhere else, plus one AgentEye-specific line:
+Same honest split as everywhere else, plus one Failproof AI Cloud-specific line:
 
 - **enforced now** — new policies + builtins enabled, with the finding each came from
 - **already covered** — findings a builtin already handles
