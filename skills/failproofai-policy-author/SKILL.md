@@ -745,12 +745,53 @@ If an evidence query returns nothing, do not assume the finding is wrong — say
 that the policy came from the finding's description rather than observed payloads. That is a
 real difference in confidence and the user should know which one they got.
 
-### Author as normal
+### Turn one issue into an enforceable policy
+
+An issue names a *behaviour*. A policy matches a *tool call*. Getting from one to the other
+is four lookups, and **skipping them is how a plausible policy that never fires gets
+shipped.** Never infer the tool from the issue title.
+
+```bash
+agenteye --json issues list                       # breach_summary names the session
+agenteye --json events --full --session-id <id>   # the only source of real payloads
+```
+
+| Step | Where it comes from | Why it matters |
+|---|---|---|
+| 1. The **harness** | `payload.agent_id` — `hermes-kratos` → hermes | decides whether the event can block at all |
+| 2. The **real tool** | `payload.tool_name` | the issue's wording is not the tool |
+| 3. The **input key** | `payload.input` keys | an unmapped tool's keys are raw too |
+| 4. **Enforceability** | `references/harnesses.md` for that (harness, event) | a deny on an observe pair changes nothing |
+
+**A worked case, from a real board.** The issue read *"Agent creates Jira issues in wrong
+project space (BOBBY vs ZAUM)."* That fleet **does** emit `mcp_jira_jira_create_issue`, so
+the obvious policy gates that tool. It would never have fired: the payload shows the write
+went through **`execute_code`** running a Python `JiraClient`, on `hermes-kratos`. So the
+real shape is `ctx.toolName === "execute_code"`, reading `ctx.toolInput.code` — a **source
+string**, with the project key inside it — scoped by `ctx.cli === "hermes"`.
+`references/patterns.md` carries the finished policy.
+
+Two things that bite while reading payloads:
+
+- **Events arrive duplicated.** The same `tool_use` appeared 2–4× per call on a live fleet
+  (their own board carries an "event-level 4× ingestion duplication" issue). Dedupe on
+  `payload.tool_call_id` before counting anything, or every frequency you quote is inflated.
+- **`payload.summary` is often empty** for `tool_use`; the name lives at `payload.tool_name`.
+
+### Author as normal, and test on the real payload
 
 Straight into *The authoring core* — builtins and their params first, then mode, then filename, then test both
 directions. Failproof AI Cloud changes where the work comes from, not how a policy is written.
-`agenteye list tools` is worth one call: a policy matching a tool the fleet never emits is
-dead on arrival.
+
+Two calls are worth making first. `agenteye list tools` — a policy matching a tool the fleet
+never emits is dead on arrival — and `scripts/fleet-tool-coverage.mjs`, because on a real
+fleet only ~11% of the tool surface is builtin-reachable (*Measure builtin coverage*).
+
+**Use the captured payload as the test case.** You already fetched it; feed the real `code` /
+`command` string to `test-policy.mjs --cli <harness>` as the should-deny case, and a real
+*legitimate* payload from the same session as the should-allow. That is the difference
+between "this regex looks right" and "this blocks what actually happened and permits what
+actually worked".
 
 ### Propose the close-out; do not run it
 

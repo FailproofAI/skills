@@ -121,6 +121,79 @@ Points that matter:
 - **Gate on `ctx.cli`** unless the name is genuinely universal. `references/harnesses.md`
   lists what each harness canonicalizes; anything absent is raw.
 
+## From a cloud issue to a policy that actually fires
+
+The highest-value shape, and the easiest to get wrong. A real board carried:
+
+> **Agent creates Jira issues in wrong project space (BOBBY vs ZAUM)** — the agent created
+> `BOBBY-11` and it reached the live Jira instance.
+
+The obvious policy gates `mcp_jira_jira_create_issue`, which that fleet genuinely emits. It
+would **never have fired**. The payload showed the write went through `execute_code` running
+a Python `JiraClient` — so the project key was a string *inside source code*, on a tool with
+no canonical name, on Hermes.
+
+```js
+// derived-from: Failproof AI Cloud issue 5523b77b-d5c8-4750-a4f6-ee1645a111f7
+// "Agent creates Jira issues in wrong project space (BOBBY vs ZAUM)"
+// Observed in session 20260824_120141_a0b62555, agent hermes-kratos.
+// The write did NOT go through an MCP Jira tool — it went through `execute_code`
+// running a Python JiraClient, so the project key is a STRING INSIDE THE CODE.
+import { customPolicies, allow, deny } from "failproofai";
+
+const ALLOWED_PROJECTS = new Set(["ZAUM"]);
+
+// Writes only. Reads to any project are fine and must not be blocked.
+const WRITE_CALL = /\b(create_issue|update_issue|add_comment|transition_issue)\s*\(/;
+const WRITE_REST = /["'](POST|PUT|DELETE)["']\s*,\s*["']\/rest\/api/;
+
+// Bare project keys (project = ZAUM / "project":"BOBBY") and issue keys (ZAUM-56).
+const PROJECT_HINT = /\bproject\b\s*[:=]\s*["']?([A-Z][A-Z0-9]{1,9})\b|\b([A-Z][A-Z0-9]{2,9})-\d+\b/g;
+
+customPolicies.add({
+  name: "block-jira-write-outside-allowed-project",
+  description: "Hermes execute_code may only write to allow-listed Jira projects",
+  match: { events: ["PreToolUse"] },
+  fn: async (ctx) => {
+    if (ctx.cli !== "hermes") return allow();
+    if (ctx.toolName !== "execute_code") return allow();
+
+    const code = String(ctx.toolInput?.code ?? "");
+    if (!WRITE_CALL.test(code) && !WRITE_REST.test(code)) return allow();
+
+    const seen = new Set();
+    for (const m of code.matchAll(PROJECT_HINT)) {
+      const key = m[1] ?? m[2];
+      if (key) seen.add(key);
+    }
+    const bad = [...seen].filter((k) => !ALLOWED_PROJECTS.has(k));
+    if (bad.length === 0) return allow();
+
+    return deny(
+      `This code writes to Jira project(s) ${bad.join(", ")}, which are not allow-listed. ` +
+        `Only ${[...ALLOWED_PROJECTS].join(", ")} may be written to. Re-target the write, ` +
+        `or ask the user to confirm the project before running it.`,
+    );
+  },
+});
+```
+
+Why each line is what it is:
+
+- **`ctx.cli !== "hermes"`** — `execute_code` means nothing on the other eleven harnesses,
+  and a future CLI could ship the name with different arguments.
+- **`ctx.toolInput?.code`** — not `command`. An unmapped tool's input keys are raw too; this
+  key came from the observed `payload.input`, not from a guess.
+- **Writes only.** `get_issue` against any project is legitimate and must stay allowed —
+  gating reads would get the policy disabled within a day.
+- **Allowlist, not denylist.** The issue named BOBBY, but the next wrong project will have a
+  different name. Denying "not ZAUM" survives that; denying "BOBBY" does not.
+
+Tested against the **real captured payloads** from the session the issue names: the genuine
+ZAUM write passes, the same payload retargeted to BOBBY is denied, the genuine read-only
+payload passes, and another harness is untouched. That is the standard to hold — a regex
+that looks right is not the same as one proven against what actually happened.
+
 ## Three modes — pick one deliberately
 
 failproofai is not only a blocker. The builtins split three ways, and the name prefix
