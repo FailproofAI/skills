@@ -527,6 +527,11 @@ const rendered = out.join("\n") + "\n";
 const data = {
   _generated: "sync-harnesses.mjs — do not hand-edit",
   clis: CLIS,
+  // Raw tool name -> canonical, per CLI. Carried so fleet-tool-coverage.mjs can
+  // answer "how much of what my agents actually call can a builtin even match?"
+  // without needing the package source on the machine.
+  toolMaps,
+  toolInputMaps: inputMaps,
   // canonical event -> cli -> "block" | "observe" | "unverified" | "not-installed"
   events: Object.fromEntries(
     CANONICAL_EVENTS.map((e) => [

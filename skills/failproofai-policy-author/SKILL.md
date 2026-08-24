@@ -401,6 +401,43 @@ Two judgment calls to make before writing, and to state back to the user at the 
   (*Never widen scope on your own initiative*). `references/harnesses.md` lists the scopes
   each CLI supports.
 
+### Measure builtin coverage against your real tool surface
+
+`references/builtins.md` says what the 39 builtins catch. It does **not** say whether your
+agents call the tools they filter on — and on a real fleet the answer is mostly no.
+
+```bash
+node "$SKILL_DIR/scripts/fleet-tool-coverage.mjs"
+```
+
+It reads `list tools` from the cloud and cross-references it against every harness's map.
+Measured on a live fleet:
+
+    140 distinct tools seen across the fleet.
+      16 canonicalize on at least one harness — builtins can match these (11%)
+      124 arrive RAW everywhere — no builtin can ever match them
+
+**89% of that fleet's tool surface was outside every builtin's reach**, and not at the
+margins: `execute`, `execute_code`, `process` and `computer_use` all run code without being
+`Bash`, so `block-sudo`, `block-rm-rf` and `protect-env-vars` are blind to them. So are
+`OUTLOOK_SEND_EMAIL`, `OUTLOOK_DELETE_CALENDAR_EVENT`, `mcp_jira_jira_delete_issue`,
+`supermemory_forget`, and the whole `browser_*` family.
+
+This changes the default answer to "is a builtin enough?". For anything a fleet reaches
+through MCP, a gateway or a browser, it is **no** — and "the builtin is enabled" is not
+evidence of coverage unless the tool it filters on is one the agents actually call.
+
+Two hazards the same data exposes:
+
+- **One tool, several spellings.** `mcp__composio__OUTLOOK_GET_MESSAGE` and
+  `mcp_composio_OUTLOOK_GET_MESSAGE` are the same tool under two conventions, and
+  `composio.GMAIL_*` is a third. Nine tools appeared under more than one name. A regex
+  anchored on `mcp__` silently misses the `mcp_` half — match the distinctive middle, not
+  the prefix.
+- **Tool names are not always clean.** That fleet recorded a whole shell command as a tool
+  name (`agentmail inboxes:messages list --inbox-id …`) and one corrupted entry
+  (`memor……y_get`). Read the real values before anchoring a pattern on them.
+
 ### Check the builtins first
 
 Read `references/builtins.md`. All 39 builtins with their categories, default state, events
