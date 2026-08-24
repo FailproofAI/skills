@@ -79,6 +79,48 @@ customPolicies.add({
 `file_path` is canonical across all 12 CLIs — the per-CLI input maps normalize Copilot's
 `path`, Hermes's `path`, etc. before your policy sees it.
 
+## Match a harness's own tool (no canonical name)
+
+Every harness ships tools that have no Claude equivalent and therefore no entry in its map —
+Hermes' `browser_*`, `cronjob`, `memory`, `session_search`, `process`; MCP tools (`mcp__*`);
+Skills; anything added since the maps were written.
+
+**They are still intercepted.** `PreToolUse` fires for every tool a harness emits; an
+unmapped one simply arrives under its raw name. What you lose is builtin coverage, because
+the builtins filter on `Bash` / `Read` / `Write` / `Edit`. Verified live against
+`--cli hermes`.
+
+```js
+import { customPolicies, allow, deny } from "failproofai";
+
+// Hermes drives a real browser. Gate it to the hosts you trust.
+const ALLOWED = /^https:\/\/(docs\.internal|github\.com)\//;
+
+customPolicies.add({
+  name: "block-untrusted-browser-nav",
+  description: "Hermes browser_open is unmapped, so no builtin covers it",
+  match: { events: ["PreToolUse"] },
+  fn: async (ctx) => {
+    // Scope by harness: `browser_open` means nothing on the other eleven, and a
+    // future CLI could ship the same name with different arguments.
+    if (ctx.cli !== "hermes") return allow();
+    if (ctx.toolName !== "browser_open") return allow();
+    const url = String(ctx.toolInput?.url ?? "");
+    if (ALLOWED.test(url)) return allow();
+    return deny(`browser_open to ${url} is not on the allowlist. Use an approved host.`);
+  },
+});
+```
+
+Points that matter:
+- **Get the raw name from evidence, not memory.** The audit finding's `examples[]`, or
+  `agenteye list tools` for a fleet. A guessed tool name matches nothing and fails silently.
+- **`toolInput` keys are raw too.** Canonicalization of input keys is also per-tool and
+  per-harness (`*_TOOL_INPUT_MAP`), so an unmapped tool's arguments arrive exactly as the
+  harness sent them. Read the payload before assuming a key name.
+- **Gate on `ctx.cli`** unless the name is genuinely universal. `references/harnesses.md`
+  lists what each harness canonicalizes; anything absent is raw.
+
 ## Three modes — pick one deliberately
 
 failproofai is not only a blocker. The builtins split three ways, and the name prefix

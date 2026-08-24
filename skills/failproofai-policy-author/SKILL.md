@@ -286,13 +286,27 @@ hits are all from Hermes reads like ordinary Bucket A work. It is `DEAD` — fai
 installs **no `Stop` event for Hermes at all**, so the policy would never run. Enabling the
 builtin would close the finding and change nothing.
 
-**The tool axis has the same trap.** Each harness renames its tools, and failproofai
-canonicalizes only what is in that harness's map (*Write tool names in the canonical
-vocabulary*). A tool outside the map arrives under its **raw** name — Hermes' `browser_*`,
-`skill_view`, `cronjob`, `memory`, `session_search`, `clarify` and `process` are not mapped,
-so a policy filtering `ctx.toolName === "Bash"` never sees them even though `PreToolUse`
-fires. When a finding's hits come from a non-Claude harness, check that harness's table in
-`references/harnesses.md` before choosing what to match on.
+**The tool axis looks like the same trap and is not.** Each harness renames its tools, and
+failproofai canonicalizes only what is in that harness's map (*Write tool names in the
+canonical vocabulary*). Hermes' `browser_*`, `skill_view`, `cronjob`, `memory`,
+`session_search`, `clarify` and `process` are not mapped, so a policy filtering
+`ctx.toolName === "Bash"` never sees them.
+
+**But the event still fires, and the tool still reaches you — under its raw name.** Verified
+live: a policy matching `browser_open` denies correctly under `--cli hermes`, with `ctx.cli`
+set. Canonicalization gates the **builtins**, not interception.
+
+So an unmapped tool is never a dead end — it is a different match:
+
+```js
+// ctx.cli scopes it to the harness that emits this name
+if (ctx.cli === "hermes" && ctx.toolName === "browser_open") return deny("…");
+```
+
+This matters because the opposite conclusion is the intuitive one, and it is the reason
+findings on non-Claude harnesses get written off as unfixable. The right answer is almost
+always "match the raw name", with only builtin coverage lost. Check the harness's table in
+`references/harnesses.md` for what canonicalizes; assume anything absent arrives raw.
 
 ### Sort every finding into one of three buckets
 
@@ -445,10 +459,15 @@ Matching what the CLI actually sends is the mistake — Hermes' `terminal`, Copi
 `powershell`, Antigravity's `run_command`, OpenCode's `filePath` never reach your policy
 under those names. Per-CLI maps are in `references/harnesses.md`.
 
-The exception is tools with no canonical form: MCP tools (`mcp__*`), Skills, and anything a
-CLI added since the maps were written. Those pass through unmapped, so match them by raw
-name and expect the name to differ per CLI. `agenteye list tools` shows what a fleet
-actually emits — a policy matching a tool nobody calls is dead on arrival.
+The exception is tools with no canonical form: a harness's own tools (Hermes' `browser_*`,
+`cronjob`, `memory`, …), MCP tools (`mcp__*`), Skills, and anything a CLI added since the
+maps were written. **These are still fully interceptable** — `PreToolUse` fires for every
+tool a harness emits, and an unmapped one arrives under its raw name with `ctx.cli` set.
+Canonicalization decides whether the *builtins* match, not whether you can see the call.
+Match the raw name, scope it with `ctx.cli`, and expect the name to differ per harness.
+
+`agenteye list tools` shows what a fleet actually emits — a policy matching a tool nobody
+calls is dead on arrival, and a harness's own tools are exactly where that goes wrong.
 
 ### Write the file
 

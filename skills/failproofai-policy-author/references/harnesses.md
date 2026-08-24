@@ -51,6 +51,29 @@ Claude-only events (`TaskCreated`, `Elicitation`, `WorktreeRemove`, `ConfigChang
 are omitted from the matrix — they are `—` everywhere else by construction. Their
 capability is listed under *claude* below.
 
+## Canonicalization gates BUILTINS, not interception
+
+The single most useful thing to know before reading the per-CLI tables, because it is the
+opposite of what they look like they say.
+
+**`PreToolUse` fires for every tool a harness emits, mapped or not.** An unmapped tool is
+not invisible — it reaches your policy under its **raw** name, with `ctx.cli` set. Verified
+live: a policy matching `browser_open` (a Hermes tool that appears in no map) denies
+correctly under `--cli hermes`, and the reason surfaces as normal.
+
+What canonicalization actually decides is whether the **builtins** match, since they filter
+on `Bash` / `Read` / `Write` / `Edit`. So:
+
+| Tool is | Builtins | A custom policy |
+|---|---|---|
+| in the harness's map | fire normally | match the canonical name |
+| not in the map | **never match it** | matches the raw name, and works |
+
+This is the fix for the most common dead end in audit triage — *"the audit flagged
+something on a harness whose tool we do not canonicalize, so nothing can be done."*
+Something can be done: match the raw name. What you lose is only builtin coverage, and
+`ctx.cli` lets you scope the rule to the harness that actually emits that name.
+
 ## The one rule that follows from this table
 
 **`PreToolUse` is the only event that blocks on every harness that has it.** Every other

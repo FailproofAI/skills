@@ -373,6 +373,29 @@ const universal = CANONICAL_EVENTS.filter((e) => {
   return hosts.length > 1 && hosts.every((c) => capability[c]?.events?.[e]?.cap === "block");
 });
 
+p("## Canonicalization gates BUILTINS, not interception");
+p();
+p("The single most useful thing to know before reading the per-CLI tables, because it is the");
+p("opposite of what they look like they say.");
+p();
+p("**`PreToolUse` fires for every tool a harness emits, mapped or not.** An unmapped tool is");
+p("not invisible — it reaches your policy under its **raw** name, with `ctx.cli` set. Verified");
+p("live: a policy matching `browser_open` (a Hermes tool that appears in no map) denies");
+p("correctly under `--cli hermes`, and the reason surfaces as normal.");
+p();
+p("What canonicalization actually decides is whether the **builtins** match, since they filter");
+p("on `Bash` / `Read` / `Write` / `Edit`. So:");
+p();
+p("| Tool is | Builtins | A custom policy |");
+p("|---|---|---|");
+p("| in the harness's map | fire normally | match the canonical name |");
+p("| not in the map | **never match it** | matches the raw name, and works |");
+p();
+p("This is the fix for the most common dead end in audit triage — *\"the audit flagged");
+p("something on a harness whose tool we do not canonicalize, so nothing can be done.\"*");
+p("Something can be done: match the raw name. What you lose is only builtin coverage, and");
+p("`ctx.cli` lets you scope the rule to the harness that actually emits that name.");
+p();
 p("## The one rule that follows from this table");
 p();
 if (universal.length === 1 && universal[0] === "PreToolUse") {
