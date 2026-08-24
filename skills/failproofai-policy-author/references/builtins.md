@@ -51,7 +51,7 @@ To enable: add the short name to `enabledPolicies` in `.failproofai/policies-con
 | `block-sudo` | **on** | PreToolUse, PermissionRequest | Block sudo commands _(params: allowPatterns)_ |
 | `block-curl-pipe-sh` | **on** | PreToolUse | Block piping downloads to shell |
 | `block-rm-rf` | off | PreToolUse | Prevent catastrophic deletions _(params: allowPaths)_ |
-| `block-failproofai-commands` | **on** | PreToolUse | Block failproofai CLI commands and uninstallation |
+| `block-failproofai-commands` | **on** | PreToolUse, PermissionRequest | Block failproofai CLI commands, self-pause and uninstallation |
 | `block-secrets-write` | off | PreToolUse | Block writing secret key files _(params: additionalPatterns)_ |
 
 ### Infra Commands

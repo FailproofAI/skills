@@ -144,13 +144,23 @@ a row in the dashboard — do **not** run the full triage. Handle just that one:
    valuable thing the audit gives you. They become the should-fire cases in *Verify it fires* (should-deny
    for a block-mode policy, should-instruct for oversight), which means the finished policy
    is proven against what actually happened rather than against invented input.
-3. Pick the mode from the finding's severity class (*The authoring core*'s mode table): deny-class findings
+3. **Attribute it to a harness** — one command, and it decides whether the rest of this list
+   is worth doing at all:
+
+   ```bash
+   node "$SKILL_DIR/scripts/attribute-findings.mjs" --name <finding>
+   ```
+
+   A `DEAD` verdict means the policy cannot fire where the hits came from; stop and say so
+   rather than shipping one (*Attribute every finding to a harness*). `PARTIAL` means it
+   works on some harnesses only, and the report has to name which.
+4. Pick the mode from the finding's severity class (*The authoring core*'s mode table): deny-class findings
    get `deny()`, warn-class get `instruct()` oversight. **State the choice in one line and
    offer the other mode** — "went with oversight since this has legitimate uses; say the
    word for a hard block." The user asked for enforcement; which flavor is their call.
-4. Check whether a builtin covers it (*Check the builtins first*). If yes and it is off, that is a config line,
+5. Check whether a builtin covers it (*Check the builtins first*). If yes and it is off, that is a config line,
    not a policy.
-5. Otherwise author it (*The authoring core*), test against those examples, report back.
+6. Otherwise author it (*The authoring core*), test against those examples, report back.
 
 Mention what else is unaddressed in one line at the end — do not expand into a full triage
 they did not ask for.
@@ -244,7 +254,50 @@ project-scope config protects only one. If findings span many projects and enfor
 in a single project config, the honest conclusion is that most of those hits are still
 unprotected — and the fix belongs in the **global** config, not a project one.
 
+### Attribute every finding to a harness before triaging it
+
+**A finding does not say which harness it came from, and that decides whether a policy can
+work at all.** The audit scans all 12 CLIs and then aggregates: `AuditCount` carries `hits`,
+`projects` and `examples[]` but **no `cli` field** (`src/audit/types.ts`, grep
+`interface AuditCount`). So "47 hits" hides the split, and triaging it as one thing produces
+policies that enforce nothing on the harness that actually misbehaved.
+
+The attribution survives in the **per-transcript** cache, which the aggregate discarded:
+`~/.failproofai/audit/cache/<sha1>.json` holds a `TranscriptAuditResult` with both `cli` and
+`hitsByName`. Join them:
+
+```bash
+node "$SKILL_DIR/scripts/attribute-findings.mjs"            # all findings
+node "$SKILL_DIR/scripts/attribute-findings.mjs" --name git-commit-no-verify
+```
+
+It cross-references each finding's events against the capability matrix and returns one of
+four verdicts:
+
+| Verdict | Meaning | What to do |
+|---|---|---|
+| `OK` | every harness with hits can block one of the policy's events | triage normally |
+| `PARTIAL` | blocks on some, discarded or absent on others | author it, and **name the harnesses it does not cover**. Never report the finding as fixed |
+| `DEAD` | no harness with hits can act on the verdict | **do not write the policy as specified.** Pick a different event, or say the behaviour is not interceptable there |
+| `DETECT` | audit-only detector, no builtin behind it | Bucket C — you pick the event yourself, so pick one that blocks where the hits are |
+
+A worked example of the failure this prevents: a `require-push-before-stop` finding whose
+hits are all from Hermes reads like ordinary Bucket A work. It is `DEAD` — failproofai
+installs **no `Stop` event for Hermes at all**, so the policy would never run. Enabling the
+builtin would close the finding and change nothing.
+
+**The tool axis has the same trap.** Each harness renames its tools, and failproofai
+canonicalizes only what is in that harness's map (*Write tool names in the canonical
+vocabulary*). A tool outside the map arrives under its **raw** name — Hermes' `browser_*`,
+`skill_view`, `cronjob`, `memory`, `session_search`, `clarify` and `process` are not mapped,
+so a policy filtering `ctx.toolName === "Bash"` never sees them even though `PreToolUse`
+fires. When a finding's hits come from a non-Claude harness, check that harness's table in
+`references/harnesses.md` before choosing what to match on.
+
 ### Sort every finding into one of three buckets
+
+Run the attribution above first — a `DEAD` finding is not Bucket A, B or C; it is
+"unenforceable on the harness where it happened", and saying so is the correct output.
 
 **Bucket A — a builtin covers it and is off.** Do not write code. Add the short name to
 `enabledPolicies` in `.failproofai/policies-config.json`. This is the cheapest and most
@@ -276,7 +329,11 @@ So most audit-only detectors are Bucket C. That is the gap this skill exists to 
 
 ### Present the triage before acting
 
-Show the user the three buckets with hit counts, then act. For Bucket A, propose the
+Show the user the three buckets with hit counts **and the harness split**, then act. A hit
+count on its own reads as one number to fix; `47 hits (claude 40, hermes 7 — DEAD on hermes)`
+reads as the two different problems it actually is.
+
+For Bucket A, propose the
 config diff rather than silently editing — enabling enforcement changes what their agent is
 allowed to do. For a single explicit request ("turn on block-rm-rf"), just edit it.
 

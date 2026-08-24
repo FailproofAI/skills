@@ -132,6 +132,10 @@ sees them — always match the canonical name in the left column):
 | `Bash` | `write_stdin` |
 | `Edit` | `apply_patch` |
 
+**That table is exhaustive.** Any other tool this CLI emits — its own extras, MCP
+tools (`mcp__*`), Skills, anything added since — reaches your policy under its **raw**
+name. Filtering on a canonical name silently skips all of them.
+
 ### `copilot`
 
 *Config scopes:* `user`, `project`
@@ -167,6 +171,10 @@ sees them — always match the canonical name in the left column):
 | `Read` | `read`, `view`, `show_file` |
 | `WebFetch` | `web_fetch` |
 | `Write` | `write`, `create` |
+
+**That table is exhaustive.** Any other tool this CLI emits — its own extras, MCP
+tools (`mcp__*`), Skills, anything added since — reaches your policy under its **raw**
+name. Filtering on a canonical name silently skips all of them.
 
 Input keys are canonicalized too:
 
@@ -204,6 +212,10 @@ sees them — always match the canonical name in the left column):
 |---|---|
 | `Bash` | `Shell` |
 
+**That table is exhaustive.** Any other tool this CLI emits — its own extras, MCP
+tools (`mcp__*`), Skills, anything added since — reaches your policy under its **raw**
+name. Filtering on a canonical name silently skips all of them.
+
 ### `opencode`
 
 *Config scopes:* `user`, `project`
@@ -238,6 +250,10 @@ sees them — always match the canonical name in the left column):
 | `WebFetch` | `webfetch` |
 | `WebSearch` | `websearch` |
 | `Write` | `write` |
+
+**That table is exhaustive.** Any other tool this CLI emits — its own extras, MCP
+tools (`mcp__*`), Skills, anything added since — reaches your policy under its **raw**
+name. Filtering on a canonical name silently skips all of them.
 
 Input keys are canonicalized too:
 
@@ -277,6 +293,10 @@ sees them — always match the canonical name in the left column):
 | `Read` | `read` |
 | `Write` | `write` |
 
+**That table is exhaustive.** Any other tool this CLI emits — its own extras, MCP
+tools (`mcp__*`), Skills, anything added since — reaches your policy under its **raw**
+name. Filtering on a canonical name silently skips all of them.
+
 Input keys are canonicalized too:
 
 | Tool | You read | This CLI sends |
@@ -314,6 +334,10 @@ sees them — always match the canonical name in the left column):
 | `WebFetch` | `web_extract` |
 | `WebSearch` | `web_search` |
 | `Write` | `write_file` |
+
+**That table is exhaustive.** Any other tool this CLI emits — its own extras, MCP
+tools (`mcp__*`), Skills, anything added since — reaches your policy under its **raw**
+name. Filtering on a canonical name silently skips all of them.
 
 Input keys are canonicalized too:
 
@@ -353,6 +377,10 @@ sees them — always match the canonical name in the left column):
 | `WebFetch` | `web_fetch` |
 | `WebSearch` | `web_search` |
 | `Write` | `write` |
+
+**That table is exhaustive.** Any other tool this CLI emits — its own extras, MCP
+tools (`mcp__*`), Skills, anything added since — reaches your policy under its **raw**
+name. Filtering on a canonical name silently skips all of them.
 
 Input keys are canonicalized too:
 
@@ -397,6 +425,10 @@ sees them — always match the canonical name in the left column):
 | `WebSearch` | `WebSearch` |
 | `Write` | `Create` |
 
+**That table is exhaustive.** Any other tool this CLI emits — its own extras, MCP
+tools (`mcp__*`), Skills, anything added since — reaches your policy under its **raw**
+name. Filtering on a canonical name silently skips all of them.
+
 ### `devin`
 
 *Config scopes:* `user`, `project`
@@ -421,6 +453,10 @@ sees them — always match the canonical name in the left column):
 | You match | This CLI actually sends |
 |---|---|
 | `Bash` | `exec` |
+
+**That table is exhaustive.** Any other tool this CLI emits — its own extras, MCP
+tools (`mcp__*`), Skills, anything added since — reaches your policy under its **raw**
+name. Filtering on a canonical name silently skips all of them.
 
 ### `antigravity`
 
@@ -449,6 +485,10 @@ sees them — always match the canonical name in the left column):
 | `WebFetch` | `read_url_content` |
 | `WebSearch` | `search_web` |
 | `Write` | `write_to_file` |
+
+**That table is exhaustive.** Any other tool this CLI emits — its own extras, MCP
+tools (`mcp__*`), Skills, anything added since — reaches your policy under its **raw**
+name. Filtering on a canonical name silently skips all of them.
 
 Input keys are canonicalized too:
 
@@ -493,6 +533,10 @@ sees them — always match the canonical name in the left column):
 | `Task` | `delegate` |
 | `TodoWrite` | `todo__todo_write` |
 | `Write` | `write` |
+
+**That table is exhaustive.** Any other tool this CLI emits — its own extras, MCP
+tools (`mcp__*`), Skills, anything added since — reaches your policy under its **raw**
+name. Filtering on a canonical name silently skips all of them.
 
 Input keys are canonicalized too:
 

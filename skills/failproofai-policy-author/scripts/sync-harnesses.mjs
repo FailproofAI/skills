@@ -452,6 +452,18 @@ for (const cli of CLIS) {
       p(`| \`${canon}\` | ${raws.map((r) => `\`${r}\``).join(", ")} |`);
     }
     p();
+    // The rows above are the ONLY names canonicalized for this CLI. Saying so
+    // per-CLI matters more than it looks: a policy filtering on `Bash` silently
+    // ignores every tool missing from this table, which is how a finding from
+    // one of them gets "fixed" by a policy that can never match it.
+    p(
+      "**That table is exhaustive.** Any other tool this CLI emits — its own extras, MCP",
+    );
+    p(
+      "tools (`mcp__*`), Skills, anything added since — reaches your policy under its **raw**",
+    );
+    p("name. Filtering on a canonical name silently skips all of them.");
+    p();
     if (Object.keys(im).length) {
       p("Input keys are canonicalized too:");
       p();
