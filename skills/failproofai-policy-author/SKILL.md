@@ -758,15 +758,16 @@ agenteye --json events --full --session-id <id>   # the only source of real payl
 
 | Step | Where it comes from | Why it matters |
 |---|---|---|
-| 1. The **harness** | `payload.agent_id` — `hermes-kratos` → hermes | decides whether the event can block at all |
+| 1. The **harness** | `payload.agent_id` — `hermes-northwind` → hermes | decides whether the event can block at all |
 | 2. The **real tool** | `payload.tool_name` | the issue's wording is not the tool |
 | 3. The **input key** | `payload.input` keys | an unmapped tool's keys are raw too |
 | 4. **Enforceability** | `references/harnesses.md` for that (harness, event) | a deny on an observe pair changes nothing |
 
-**A worked case, from a real board.** The issue read *"Agent creates Jira issues in wrong
-project space (BOBBY vs ZAUM)."* That fleet **does** emit `mcp_jira_jira_create_issue`, so
-the obvious policy gates that tool. It would never have fired: the payload shows the write
-went through **`execute_code`** running a Python `JiraClient`, on `hermes-kratos`. So the
+**A worked case, from a real board** (names illustrative). The issue read *"Agent creates
+Jira issues in wrong project space (SANDBOX vs ACME)."* That fleet **does** emit
+`mcp_jira_jira_create_issue`, so the obvious policy gates that tool. It would never have
+fired: the payload shows the write went through **`execute_code`** running a Python
+`JiraClient`, on `hermes-northwind`. So the
 real shape is `ctx.toolName === "execute_code"`, reading `ctx.toolInput.code` — a **source
 string**, with the project key inside it — scoped by `ctx.cli === "hermes"`.
 `references/patterns.md` carries the finished policy.
