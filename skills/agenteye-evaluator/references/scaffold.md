@@ -261,7 +261,7 @@ EVALUATOR_TOKEN=dev-secret          # byte-identical to the evaluator's
 Then finish a session and confirm the scores landed:
 
 ```bash
-agenteye --json evals --session-id <id>
+fp --json evals --session-id <id>
 ```
 
 If nothing appears, work down: is `EVALUATOR_ENDPOINT` set on the server (unset is

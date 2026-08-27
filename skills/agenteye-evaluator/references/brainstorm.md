@@ -39,30 +39,30 @@ learning what to look *for*.
 Before you open a single session, quantify the landscape so your corpus is *chosen
 from evidence*, not guessed. Run, at minimum:
 
-- **Facets — what even exists.** `agenteye --json list agents`, `list envs`,
+- **Facets — what even exists.** `fp --json list agents`, `list envs`,
   `list error_types`, `list score_filters`. This is the vocabulary of their
   deployment: which agents run, which environments, what errors occur, and which
   score keys (if any) already exist.
-- **Where it hurts, and how often.** `agenteye --json errors --aggregate --since 7d`
-  for the error hotspots; `agenteye --json sessions --status error,timeout --since 7d
+- **Where it hurts, and how often.** `fp --json errors --aggregate --since 7d`
+  for the error hotspots; `fp --json sessions --status error,timeout --since 7d
   --all --limit 1000` for the count and identity of failed runs (compare against a
   healthy window to get a rate, not just a number).
-- **What's already scored.** `agenteye --json evals --aggregate --since 7d` →
+- **What's already scored.** `fp --json evals --aggregate --since 7d` →
   `score_stats` tells you which dimensions are tracked today and how they're
   distributed — so you don't re-propose something they already have, and you can spot
   a score that's uniformly high (measuring nothing) or already regressing.
-- **Anything the flags can't express — drop to SQL.** `agenteye --json query run
+- **Anything the flags can't express — drop to SQL.** `fp --json query run
   --sql "…"` runs over the exposed tables `events`, `evaluations`, `agent_sessions`
-  (`agenteye --json query schema` prints the columns first — check it before
+  (`fp --json query schema` prints the columns first — check it before
   guessing one). This is how you get the shape of the whole dataset:
 
   ```bash
   # event-type histogram across the population
-  agenteye --json query run --sql \
+  fp --json query run --sql \
     "SELECT event_type, count() c FROM events GROUP BY event_type ORDER BY c DESC"
 
   # the biggest / longest sessions — your outlier candidates
-  agenteye --json query run --sql \
+  fp --json query run --sql \
     "SELECT session_id, count() c FROM events GROUP BY session_id ORDER BY c DESC LIMIT 20"
   ```
 
@@ -88,7 +88,7 @@ random:
   with the most errors.
 
 Pull mechanics are in [`session-data.md`](session-data.md): the export endpoint gives
-a byte-identical fixture, or `agenteye --json events --full --session-id <id> --order
+a byte-identical fixture, or `fp --json events --full --session-id <id> --order
 asc --all --limit 1000`. Skim on the payload-free feed first (its one-line server
 `summary` per event is ideal for reading a session's *shape*), then `--full` only on
 the ones you're reading line by line. **Confirm the corpus with the user** before you
@@ -133,7 +133,7 @@ is expressible in SQL, compute it per session and compare the cohorts:
 
 ```bash
 # does "how it ended" actually track the user's good/bad call?
-agenteye --json query run --sql \
+fp --json query run --sql \
   "SELECT session_id, countIf(event_type='agent_end') AS ended, count() AS events
    FROM events GROUP BY session_id ORDER BY ended ASC, events DESC LIMIT 30"
 ```
@@ -166,7 +166,7 @@ in their data* — the schema allowing a field doesn't mean their instrumentatio
 it:
 
 ```bash
-agenteye --json events --full --session-id <id> --all --limit 1000 \
+fp --json events --full --session-id <id> --all --limit 1000 \
   | jq '[.events[] | select(.event_type=="tool_use") | .payload.tool_name] | unique'
 ```
 
@@ -255,15 +255,15 @@ quick index.
 
 | To learn… | Run |
 |---|---|
-| what exists (agents, envs, errors, score keys) | `agenteye --json list agents` / `list envs` / `list error_types` / `list score_filters` |
-| where it hurts, how often | `agenteye --json errors --aggregate --since 7d` · `agenteye --json sessions --status error,timeout --since 7d --all --limit 1000` |
-| what's already scored / regressing | `agenteye --json evals --aggregate --since 7d` (→ `score_stats`) · `agenteye --json evals --score <key>:..0.5 --since 7d --all --limit 200` |
-| a session's shape, then its content | `agenteye --json events --session-id <id> --order asc --all --limit 1000` → add `--full` |
-| anything the flags can't (duration, tokens, loops, histograms) | `agenteye --json query run --sql "…"` over `events`/`evaluations`/`agent_sessions` · `query schema` for columns |
+| what exists (agents, envs, errors, score keys) | `fp --json list agents` / `list envs` / `list error_types` / `list score_filters` |
+| where it hurts, how often | `fp --json errors --aggregate --since 7d` · `fp --json sessions --status error,timeout --since 7d --all --limit 1000` |
+| what's already scored / regressing | `fp --json evals --aggregate --since 7d` (→ `score_stats`) · `fp --json evals --score <key>:..0.5 --since 7d --all --limit 200` |
+| a session's shape, then its content | `fp --json events --session-id <id> --order asc --all --limit 1000` → add `--full` |
+| anything the flags can't (duration, tokens, loops, histograms) | `fp --json query run --sql "…"` over `events`/`evaluations`/`agent_sessions` · `query schema` for columns |
 
 **Run them *properly* — the gotchas that make a command lie:**
 
-- **Globals go before the command:** `agenteye --json events …`, never `agenteye
+- **Globals go before the command:** `fp --json events …`, never `fp
   events --json` (exit 2).
 - **`--all` is capped by `--limit` (default 50).** A bare `--all` returns 50 rows and
   looks complete. Always `--all --limit 1000`; bigger needs cursor paging.
