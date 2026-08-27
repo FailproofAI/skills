@@ -4,7 +4,7 @@ The read-and-administer control plane over telemetry your agents already emitted
 `fp-cloud-cli` 0.0.1b1, the place cloud-managed policy is written, tested and rolled out.
 This file is the **concepts and the auth model**; driving a live deployment — flags, filters,
 pagination, triage — belongs to `fp-cloud-cli`, and getting a policy onto machines belongs to
-`failproofai-policy-deploy`. Grep anchors point into the cloud CLI's Python package `fp_cli/`
+`fp-cloud-cli`. Grep anchors point into the cloud CLI's Python package `fp_cli/`
 — the installed build under `~/.local/share/uv/tools/fp-cloud-cli/lib/python*/`. Every anchor
 below resolves there in 0.0.1b1; the one exception is `INTROSPECT_PATH`, which lives in the
 local npm CLI's `cloud-introspect.ts`.
@@ -184,7 +184,7 @@ The lifecycle is compose → test → publish → `fleet deploy` → guardrails,
 has traps worth more than a table row: **publishing deploys nothing**, a bare `--add` on a new
 policy lands it in `enforce`, `disable` stops enforcement while `delete` does not, and
 `policies compose` needs `policies:write` rather than the `agent:use` its name suggests. All
-of that belongs to **`failproofai-policy-deploy`**; go there before you run any of it. What
+of that belongs to **`fp-cloud-cli`**; go there before you run any of it. What
 belongs *here* is the one constraint that is an auth fact:
 
 **Every `policies`, `fleet` and `guardrails` subcommand except `policies test` exits 2 under
@@ -397,4 +397,4 @@ email needs an enabled email channel plus SMTP, falling back to
 For anything you would type against a live deployment — filters, pagination limits,
 `--aggregate`, the saved-SQL runner, alerts, issue triage — hand off to **`fp-cloud-cli`**.
 For getting a policy onto machines — publish, deploy in observe, promote to enforce, prove it
-fired, roll back — hand off to **`failproofai-policy-deploy`**.
+fired, roll back — hand off to **`fp-cloud-cli`**.

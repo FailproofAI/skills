@@ -1,5 +1,5 @@
 ---
-name: failproofai-complete
+name: failproofai-master
 description: |-
   The complete FailproofAI reference — the whole product. Both binaries, all five verticals, every command of both CLIs, the docs map, and which sibling skill owns what. Reach for it on "explain FailproofAI", "what can it do?", "which skill do I install?"
 
@@ -10,10 +10,10 @@ description: |-
   • pick or install a skill from the collection;
   • hand one standalone artifact to an agent that must know everything, wiring a machine from zero included.
 
-  The KNOWING skill. For DOING on a live machine — a broken install, a symptom, a stopped daemon — use `failproofai`; authoring policy `failproofai-policy-author`, rollout `failproofai-policy-deploy`, the cloud `fp-cloud-cli`.
+  The KNOWING skill. For live-machine work use `failproofai`; for policy authoring use `failproofai-policy-author`; for GitHub pack publishing use `failproofai-policy-publish`; for Cloud and fleet work use `fp-cloud-cli`.
 ---
 
-# FailproofAI, complete
+# FailproofAI master skill
 
 Observability and enforcement for every harness your agents run in — coding CLIs, chat
 gateways, self-hosted assistants, and agents you instrumented yourself.
@@ -416,16 +416,16 @@ evaluator was **not** — `agenteye-evaluator` is its real, current name upstrea
 | Skill | Owns | Route to it when |
 |---|---|---|
 | `failproofai` | DOING on a machine | the user has a symptom, a broken install, a daemon that stopped, history to move in |
-| **`failproofai-complete`** (this one) | KNOWING | the user wants the product explained, the full surface, or a skill recommendation |
+| **`failproofai-master`** (this one) | KNOWING | the user wants the product explained, the full surface, or a skill recommendation |
 | `failproofai-policy-author` | writing a policy | "agents keep force-pushing" — a complaint, an audit finding, a CLAUDE.md to make real |
-| `failproofai-policy-deploy` | shipping a policy | publish a version, deploy in observe, promote, prove it fired, roll back |
+| `failproofai-policy-publish` | shipping a reusable policy pack | build, publish to GitHub, preview, and verify installation |
 | `fp-cloud-cli` *(mirror)* | operating the cloud | browse sessions/events/evals, triage issues and alerts, manage keys, users, settings, queries |
 | `failproofai-sdk` *(mirror)* | instrumenting your own agent | a Python/LangChain/CrewAI/LlamaIndex/Pydantic-AI loop that is not one of the 12 CLIs. Module is `failproofai_sdk` |
 | `agenteye-evaluator` *(mirror)* | scoring runs | decide what to score, then build the HTTP service the server POSTs transcripts to |
 
 ```bash
 npx skills add FailproofAI/skills                                  # the whole collection
-npx skills add FailproofAI/skills --skill failproofai-complete     # just one
+npx skills add FailproofAI/skills --skill failproofai-master       # just one
 npx skills add FailproofAI/skills --skill failproofai -a codex     # for a specific agent
 npx skills add FailproofAI/skills --list                           # what's in the repo
 ```

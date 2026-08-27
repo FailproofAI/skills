@@ -184,7 +184,7 @@ only installing needs the network, and an already-installed pack keeps enforcing
 `policy`, `pack` and `p` are all rewritten to `policies` before any dispatch, so anything
 anyone typed before still runs. Document `policies`. **The pack lane in depth — publishing,
 digest pinning, selection flags, `--cli` narrowing — belongs to
-`failproofai-policy-deploy`.**
+`failproofai-policy-publish`.**
 
 ### Step 1 writes nothing, and that is deliberate
 

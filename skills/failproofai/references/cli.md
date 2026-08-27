@@ -206,7 +206,7 @@ enforcing — there is no offline install of anything, ours included.
 still work — `pack list` becomes `policies` bare or `policies show <source>` with an argument,
 and `pack build` becomes `publish`. Write the new spelling.
 
-Full detail lives in `failproofai-policy-deploy/references/packs.md`.
+Full publishing detail lives in `failproofai-policy-publish/references/publishing.md`.
 
 ## `harness`
 

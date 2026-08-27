@@ -147,7 +147,7 @@ cloud side of it runs its own five-stage lifecycle, with six nouns that
 | **Guardrail** | a policy in its deployed, deciding role — evaluated/blocked totals and per-policy outcomes over a window | `fp guardrails summary` \| `timeline` |
 | **Drift** | intent vs delivery: a machine told to run version N that last pulled M. `--json` computes `drifted` for you | `fp fleet diff` |
 
-`failproofai-policy-deploy` owns the depth on all six — the ref grammar, the
+`fp-cloud-cli` owns the depth on all six — the ref grammar, the
 enforce-by-default trap on a bare `--add`, the generation guard, rollback. Two things to
 carry out of here: **publishing deploys nothing** (a new version sits unused until a
 `fleet deploy` names it), and **every `policies`, `fleet` and `guardrails` subcommand

@@ -6,11 +6,11 @@ on **what the user is trying to change**, not on which nouns they said.
 
     failproofai ─────────────► the way in. Orients, sets a machine up, routes.
          ├── failproofai-policy-author ──► decide what to enforce, write it, prove it decides
-         ├── failproofai-policy-deploy ──► get it onto machines and back off again
+         ├── failproofai-policy-publish ─► publish a GitHub pack others can install
          ├── fp-cloud-cli ───────────────► query and administer FailproofAI Cloud
          ├── failproofai-sdk ────────────► instrument an agent that is not one of the 12 CLIs
          ├── agenteye-evaluator ─────────► decide what to score, build the scoring service
-         └── failproofai-complete ───────► all of it, at full depth, in one skill
+         └── failproofai-master ─────────► all of it, at full depth, in one skill
 
 ## Install any of them
 
@@ -29,13 +29,12 @@ with that command.
 (`FailproofAI/failproofai`) and marked do-not-hand-edit.** Patching them here is a
 maintenance bug: the next sync silently reverts your change, and in the meantime two copies
 of the same claim disagree. Fix upstream, or carry the correction in a skill that is
-maintained here — `failproofai`, `failproofai-policy-author`, `failproofai-policy-deploy`,
-`failproofai-complete`.
+maintained here — `failproofai`, `failproofai-policy-author`, `failproofai-policy-publish`,
+`failproofai-master`.
 
 Two of the three were renamed with the product; the evaluator was not. **`agenteye-evaluator`
-is its real current name** — do not "fix" it. In this checkout the two renamed mirrors still
-sit under their old directory names (`skills/agenteye-cli/`, `skills/agenteye-python-sdk/`);
-the shipped skill names are the ones in the table.
+is its real current name** — do not "fix" it. The renamed mirror folders now match their
+shipped skill names: `skills/fp-cloud-cli/` and `skills/failproofai-sdk/`.
 
 ## The seven
 
@@ -67,21 +66,19 @@ appear", where the bug is usually delivery, not instrumentation.
 It reads the local audit cache directly, so the `failproofai audit` → policy hop lands here
 with the findings already in hand.
 
-### `failproofai-policy-deploy` — get it onto machines
+### `failproofai-policy-publish` — publish a reusable policy pack
 
 | | |
 |---|---|
-| **Owns** | the lifecycle after the file exists: `fp policies publish`, the `id@v:effect` ref grammar, `fp fleet deploy` (`--add`/`--remove`/`--set`), observe → enforce promotion, `fp fleet diff` and drift, `history`, `rollback`, `fp guardrails summary`/`timeline`, and `fp policies compose` |
-| **Refuses** | deciding *what* to enforce or writing the policy body (`failproofai-policy-author`), and setting up the machine that will receive it (`failproofai`) |
-| **Route to it when** | a policy already exists and the question is where it runs, in what mode, and how to undo it |
-| **Install** | `npx skills add FailproofAI/skills --skill failproofai-policy-deploy -a claude-code` |
+| **Owns** | the lifecycle after a local policy works: `failproofai publish --init`, dry runs, Git/GitHub prerequisites, pack metadata and effect, publishing release assets, previewing releases, and verifying `failproofai policies add <owner>/<repo>` |
+| **Refuses** | deciding *what* to enforce or writing the policy body (`failproofai-policy-author`), Cloud policy versions and fleet rollout (`fp-cloud-cli`), and machine setup (`failproofai`) |
+| **Route to it when** | a tested policy should become a versioned GitHub pack that other users or machines can install |
+| **Install** | `npx skills add FailproofAI/skills --skill failproofai-policy-publish -a claude-code` |
 | **Maintained** | in this repo |
 
-Three facts it exists to keep straight: **publishing deploys nothing** (a new version sits
-unused until a `fleet deploy` names it); **a bare `--add` on a new policy enforces it**, so
-write `:observe` explicitly to trial one; and **every `policies`, `fleet` and `guardrails`
-subcommand except `policies test` exits 2 under an API key** — the lifecycle is
-session-authenticated, so CI can lint a policy and cannot roll one out.
+It keeps the two publication systems separate: `failproofai publish` creates an installable
+GitHub policy pack, while `fp policies publish` creates a Cloud-managed policy version.
+Publishing a GitHub pack neither pushes source code nor installs the pack on a machine.
 
 ### `fp-cloud-cli` — query and administer the cloud
 
@@ -123,14 +120,14 @@ which is why "my events never appear" splits between this skill and `failproofai
 The one skill that keeps the old name, because the package did: distribution
 `agenteye-evaluator`, module `agenteye_evaluator`, user-agent `agenteye-server/<version>`.
 
-### `failproofai-complete` — all of it
+### `failproofai-master` — all of it
 
 | | |
 |---|---|
 | **Owns** | the whole product at full depth in one skill: both binaries' complete command surfaces, every vertical (observe, enforce, audit, administer, instrument, evaluate), env vars, the literals that must never be renamed, the glossary, and this directory |
 | **Refuses** | nothing on the product — which is exactly why it is the *last* resort, not the first. It is large |
 | **Route to it when** | a specialist's summary has run out, the question spans three or more of them at once, or the user explicitly wants the full reference |
-| **Install** | `npx skills add FailproofAI/skills --skill failproofai-complete -a claude-code` |
+| **Install** | `npx skills add FailproofAI/skills --skill failproofai-master -a claude-code` |
 | **Maintained** | in this repo |
 
 ## Naming, so cross-references resolve

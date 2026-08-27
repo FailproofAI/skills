@@ -318,7 +318,8 @@ shipped commands.
 **Every subcommand here except `policies test` exits 2 under an API key.**
 
 Rollout depth — sequencing, proving a policy fired, recovering a bad deploy — belongs to
-`failproofai-policy-deploy`. This page is the surface.
+Cloud rollout belongs to `fp-cloud-cli`; GitHub pack publishing belongs to
+`failproofai-policy-publish`. This page is the surface.
 
 ## `policies`
 

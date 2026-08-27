@@ -231,7 +231,7 @@ Nothing about *this* needs a FailproofAI Cloud permission — a failproofai poli
 plus a config entry, and that is the whole story for one machine. It is **not** the whole story
 for a fleet: `fp policies publish`, `fp fleet deploy` and `fp guardrails` are shipped commands
 that carry the same rule to every machine and show it firing, and they need `policies:write`.
-That path belongs to `failproofai-policy-deploy` — hand off rather than assuming the local
+That Cloud rollout path belongs to `fp-cloud-cli` — hand off rather than assuming the local
 edit is all there is. Then prove both local edits took effect, because neither is self-evident:
 
 ```bash
@@ -358,7 +358,7 @@ Three gaps, all declared, all of which change what you write in the report:
   fired on 50 real failures", never "would have prevented 50 failures".
 - **It is not a substitute for observing in production.** Deploying with `effect: observe`
   answers what the rule does to calls being made *now*. Use both: replay first because it is
-  free, observe second because it is true. The deploy half is `failproofai-policy-deploy`.
+  free, observe second because it is true. The Cloud deploy half is `fp-cloud-cli`.
 
 ## Closing the loop
 

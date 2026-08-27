@@ -129,7 +129,7 @@ routes — and its commands need a *user session*, so `--api-key` automation can
 ship the whole compose → test → publish → deploy → watch lane, so any text calling deployment
 "dashboard work" predates them and will stop you looking. Same session constraint as the
 Assistant, though — every subcommand there except `policies test` exits 2 under an API key.
-`failproofai-policy-deploy` owns that lane.
+`fp-cloud-cli` owns that lane.
 
 The CLI is also not a thin wrapper over `/v1`: it talks to the dashboard's `/api/*` routes,
 which is why `--search`, `--errored` and `--status` have no `/v1` equivalent. Pick the

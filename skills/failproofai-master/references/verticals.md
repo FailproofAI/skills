@@ -12,7 +12,7 @@ a machine that was never meant to have it.
 | Vertical | Local | Cloud | Owns the depth |
 |---|---|---|---|
 | Observe | hook activity + transcripts on disk, dashboard at `127.0.0.1:8020` | `events` `sessions` `errors` | `fp-cloud-cli` |
-| Enforce | packs you install + custom/convention policies, hooks in 12 harnesses | `policies` `fleet` `guardrails`, the backtest in the dashboard | `failproofai-policy-author`, `failproofai-policy-deploy` |
+| Enforce | packs you install + custom/convention policies, hooks in 12 harnesses | `policies` `fleet` `guardrails`, the backtest in the dashboard | `failproofai-policy-author`, `failproofai-policy-publish`, `fp-cloud-cli` |
 | Evaluate | — nothing | `evals` + an evaluator service you host | `agenteye-evaluator` |
 | Audit | `failproofai audit`, offline, no account | `audits` → findings → `issues` | `failproofai`, `fp-cloud-cli` |
 | Manage | — nothing | `orgs` `keys` `users` `query` `alerts` `settings` `usage` | `fp-cloud-cli` |
@@ -241,7 +241,8 @@ with `--cli` omitted off a TTY, install and uninstall target every detected agen
 Route: authoring a policy from a complaint or an audit finding, and **anything about the
 backtest** — reading a verdict, why a draft came back `observe-only`, whether to trust a green
 result — is `failproofai-policy-author`. Publishing a pack, getting a policy onto machines,
-proving it fired, and recovering a bad deploy is `failproofai-policy-deploy`. Flags and JSON
+proving it fired, and recovering a bad Cloud deploy is `fp-cloud-cli`. Publishing a reusable
+GitHub pack is `failproofai-policy-publish`. Flags and JSON
 shapes are `references/commands.md`.
 
 ---

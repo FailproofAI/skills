@@ -1,7 +1,7 @@
 ---
 name: failproofai
 description: |-
-  The way into everything FailproofAI — the product, both halves (`failproofai` local, `fp` cloud), the daemon, and the specialist skills beside it. Reach for it on "set up failproofai", "connect this machine", "why isn't my agent showing up?"
+  The way into FailproofAI — both CLIs, the daemon, and the specialist skills. Reach for it on "set up failproofai", "connect this machine", or "why isn't my agent showing up?"
 
   Trigger when the user wants to:
   • set up from zero — install, connect a machine, wire hooks into 12 agent CLIs, verify a session lands;
@@ -10,7 +10,7 @@ description: |-
   • find the right surface — audits, sessions, policies, keys and orgs, fleet deploys, self-hosting;
   • fix a live machine — a stopped daemon, a session that never lands, a dead hook.
 
-  NOT for authoring a policy (`failproofai-policy-author`), rolling one out (`failproofai-policy-deploy`), operating the cloud (`fp-cloud-cli`), evaluator scoring (`agenteye-evaluator`), the Python SDK (`failproofai-sdk`) or full depth (`failproofai-complete`) — it routes to those.
+  Routes policy authoring to `failproofai-policy-author`, pack publishing to `failproofai-policy-publish`, Cloud and fleet work to `fp-cloud-cli`, scoring to `agenteye-evaluator`, instrumentation to `failproofai-sdk`, and full-product reference questions to `failproofai-master`.
 ---
 
 # FailproofAI
@@ -103,11 +103,12 @@ product; the evaluator was not, and `agenteye-evaluator` is its real current nam
 | The request is | Go to |
 |---|---|
 | Stop a behaviour — "agents keep force-pushing", turn audit findings into enforcement, make a CLAUDE.md real, write/enable a policy | **`failproofai-policy-author`** |
-| Get a written policy onto machines — publish a version, deploy it in observe, promote to enforce, prove it fired, roll back | **`failproofai-policy-deploy`** |
+| Publish tested policies as a GitHub pack others can install | **`failproofai-policy-publish`** |
+| Publish a Cloud policy version, deploy it to fleet machines, observe, enforce, or roll back | **`fp-cloud-cli`** |
 | Query FailproofAI Cloud — browse sessions, events, errors, evals; triage issues/alerts; manage keys, users, roles, settings | **`fp-cloud-cli`** (the cloud CLI skill) |
 | Decide what to score, or build/extend an evaluator service | **`agenteye-evaluator`** |
 | Instrument an agent that is **not** one of the 12 supported CLIs — a Python/LangChain/custom loop | **`failproofai-sdk`** |
-| Every surface at once — the whole product reference, when this file's summary runs out | **`failproofai-complete`** |
+| Every surface at once — the whole product reference, when this file's summary runs out | **`failproofai-master`** |
 | Anything local-machine: install, connect, daemon, backfill, flush, capture paths, upgrade, uninstall | **stay here** |
 | Keys and org *concepts*, self-hosting, "what is X" | **stay here** |
 
@@ -366,7 +367,7 @@ State its limit honestly: that proves the policy parses, registers and decides f
 you handed it. It cannot prove the daemon feeds it the same context on a real machine. Only
 step 4 shows that.
 
-`failproofai-policy-deploy` owns this in depth — the `id@v:effect` ref grammar, `--set` versus
+`fp-cloud-cli` owns this in depth — the `id@v:effect` ref grammar, `--set` versus
 `--add`, the concurrency guard, and why `disable` stops enforcement while `delete` does not.
 
 ## Operate the fleet and the organization

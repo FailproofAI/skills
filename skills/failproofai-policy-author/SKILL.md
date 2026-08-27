@@ -12,7 +12,7 @@ description: |-
 
   Served by the `failproofai` CLI.
 
-  NOT for shipping a policy onward — publishing a version, `fp fleet deploy`, rollback, proving it fired (`failproofai-policy-deploy`); nor telemetry or running FailproofAI Cloud (`fp-cloud-cli`), evaluator scoring (`agenteye-evaluator`), or repo invariants that belong in tests.
+  NOT for publishing a finished policy pack to GitHub (`failproofai-policy-publish`); nor Cloud-managed policy versions, fleet rollout, telemetry, or org operations (`fp-cloud-cli`), evaluator scoring (`agenteye-evaluator`), or repo invariants that belong in tests.
 ---
 
 # failproofai Policies
@@ -752,7 +752,8 @@ verdict to believe:
 The backtest and an `observe`-mode deployment are complements, not substitutes: the replay
 answers *what would this have done to calls already made* in seconds, blind to the agent
 reacting; shipping with `effect: observe` answers *what is it doing to calls being made now*,
-slowly and exactly. That second half belongs to `failproofai-policy-deploy`.
+slowly and exactly. Publishing that finished policy as a reusable GitHub pack belongs to
+`failproofai-policy-publish`; Cloud fleet rollout belongs to `fp-cloud-cli`.
 
 ### Confirm the policy is actually live — then hand off
 
@@ -774,14 +775,16 @@ failproofai policies --list
 | Half | The question it answers | Skill |
 |---|---|---|
 | author | *what is the rule, and does it decide correctly?* | this one |
-| deploy | *how does it reach machines, and how do you prove it fired there?* | `failproofai-policy-deploy` |
+| publish | *how does this tested policy become a versioned GitHub pack others can install?* | `failproofai-policy-publish` |
+| cloud rollout | *which fleet machines run a Cloud policy version, and what did it block?* | `fp-cloud-cli` |
 
 Everything past a proven local file is the deploy half: minting a version with
 `fp policies publish` (which **deploys nothing** on its own), choosing `enforce` vs
 `observe`, `fp fleet deploy`, rollback, and reading `fp guardrails` to see the rule fire on
 real traffic. Those are shipped commands — if you find yourself about to say deployment is
 "dashboard work" or "not exposed by the CLI", that is wrong, and it tells the reader to stop
-looking for something that exists. Route to **`failproofai-policy-deploy`** rather than
+looking for something that exists. Route GitHub pack publication to
+**`failproofai-policy-publish`** and Cloud deployment to **`fp-cloud-cli`** rather than
 improvising: `fp fleet deploy --add <policy>` with no `:effect` on the ref defaults to
 **enforce**, not observe, which is not a default to discover by experiment.
 
@@ -974,4 +977,3 @@ Print the `issues comment-add` and `audits resolve` commands and let the user ru
 FailproofAI Cloud's confirms **auto-skip on a non-TTY, which is how you run it**, so a wrong id
 resolves someone else's finding on a shared board with no prompt — and triage needs
 `audits:write`, which a read-only account lacks. See `references/cloud.md`.
-

@@ -4,5 +4,5 @@
 # This file only tunes Codex-specific behavior.
 
 # Let Codex auto-select this skill when a task matches the description
-# (set to false to require explicit `$failproofai-policy-deploy` invocation).
+# (set to false to require explicit `$failproofai-master` invocation).
 allow_implicit_invocation: true

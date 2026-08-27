@@ -17,39 +17,55 @@ The format is shared across agents, so one definition works everywhere.
 
 ## Skills in this collection
 
+Choose one of two entry points:
+
+- Install **`failproofai-master`** when an agent should receive the complete product context
+  in one self-contained skill: local runtime, Cloud, SDK, policies, publishing, evaluator,
+  setup, commands, terminology, and routing.
+- Install **`failproofai`** when the agent mainly needs to set up, operate, or troubleshoot
+  FailproofAI and can hand specialist work to separately installed skills.
+
+The remaining skills are focused modules. Installing a focused skill does not automatically
+install its siblings; installing the whole repository does.
+
 | Skill | What it does | Source of truth |
 |---|---|---|
 | [`failproofai`](skills/failproofai/) | **Start here.** The way into the product - what FailproofAI is, setting a machine up from zero (local-only or cloud-connected), the `failproofaid` daemon, moving history in with backfill/flush/capture paths, installing hooks and policies across 12 agent CLIs, local vs cloud audits, fleet and org operations, upgrade/uninstall, and troubleshooting by symptom. Routes to the specialist skills below when one owns the job, and stands alone when they aren't installed. | Maintained here. Not synced from anywhere - edit in this repo. |
-| [`failproofai-complete`](skills/failproofai-complete/) | The whole product in **one** artifact - both binaries (`failproofai` local, `fp` cloud), all five verticals, every command of both CLIs, the env-var and never-rename tables, the docs map, and which sibling skill owns what. The *knowing* skill to `failproofai`'s *doing*: hand it to an agent that has to explain the product, or stand a machine up with no sibling installed. | Maintained here. Not synced from anywhere - edit in this repo. |
+| [`failproofai-master`](skills/failproofai-master/) | The complete FailproofAI product context in **one self-contained skill**: local runtime and daemon, FailproofAI Cloud, Python SDK, policy authoring and GitHub pack publishing, evaluator, setup, commands, terminology, troubleshooting, and the sibling-skill directory. Give this to an agent that should understand the whole product without depending on the other skills being installed. | Maintained here. Not synced from anywhere - edit in this repo. |
 | [`failproofai-policy-author`](skills/failproofai-policy-author/) | Turn what agents keep doing wrong into enforcement for [failproofai](https://github.com/FailproofAI/failproofai) - triage a `failproofai audit` or FailproofAI Cloud findings, convert a CLAUDE.md/AGENTS.md into policies, or take a plain complaint ("agents keep force-pushing") and enforce it. Checks the shipped builtins and their params before writing anything, since most requests are one line of config; knows which of the 12 supported agent CLIs actually enforce a given event, so it never ships a deny the harness discards; tests every policy it authors. | Maintained here. Not synced from anywhere - edit in this repo. |
-| [`failproofai-policy-deploy`](skills/failproofai-policy-deploy/) | Get a written policy off one machine and onto the machines that need it - prove it locally with `fp policies test` (no server, no auth), publish a version, `fp fleet deploy` in observe, read `fp guardrails`, then promote or roll back. Leads with the two traps that make a rollout look finished when it isn't: publishing deploys nothing, and a bare `--add` **enforces**. Also covers the single-machine local lane - scopes, the `*-policies.mjs` filename convention, packs. | Maintained here. Not synced from anywhere - edit in this repo. |
-| [`fp-cloud-cli`](skills/agenteye-cli/) | Operate a FailproofAI Cloud deployment from the terminal via the `fp` CLI - inspect telemetry (errors, sessions, events, evals, usage), triage alerts and issues, manage keys/users/orgs/settings, run saved queries. Global options go **before** the command: `fp --json sessions`, not `fp sessions --json`. | Synced from `FailproofAI/failproofai` → `fp-cloud-cli/skill/`. Do **not** hand-edit here. |
-| [`failproofai-sdk`](skills/agenteye-python-sdk/) | Make an AI agent report what it did - plan which points in the agent loop to record, write the instrumentation with the `failproofai_sdk` Python module, thread session/agent identity through it, and verify the events actually land. For an agent loop that is **not** one of the 12 supported CLIs. | Synced from `FailproofAI/failproofai` → `sdk/python/skill/`. Do **not** hand-edit here. |
+| [`failproofai-policy-publish`](skills/failproofai-policy-publish/) | The publishing companion to policy authoring - take tested policies, build an installable pack, publish its release assets to GitHub with `failproofai publish`, preview it, and verify the consumer path with `failproofai policies add <owner>/<repo>`. Cloud fleet rollout remains part of `fp-cloud-cli`. | Maintained here. Not synced from anywhere - edit in this repo. |
+| [`fp-cloud-cli`](skills/fp-cloud-cli/) | Operate FailproofAI Cloud with `fp`: inspect telemetry, evals and usage; triage issues and audits; manage keys, users, orgs, and settings; publish Cloud policy versions; deploy them to fleet machines; observe enforcement; promote or roll back. Global options go **before** the command: `fp --json sessions`, not `fp sessions --json`. | Synced from `FailproofAI/failproofai` → `fp-cloud-cli/skill/`. Do **not** hand-edit here. |
+| [`failproofai-sdk`](skills/failproofai-sdk/) | Make an AI agent report what it did - plan which points in the agent loop to record, write the instrumentation with the `failproofai_sdk` Python module, thread session/agent identity through it, and verify the events actually land. For an agent loop that is **not** one of the 12 supported CLIs. | Synced from `FailproofAI/failproofai` → `sdk/python/skill/`. Do **not** hand-edit here. |
 | [`agenteye-evaluator`](skills/agenteye-evaluator/) | Put automatic quality scores on an agent's production runs - decide which dimensions are worth scoring from real sessions, scaffold the scoring service with the `agenteye-evaluator` Python SDK, score with rules or an LLM judge, test it against a captured session, deploy it and confirm scores land. | Synced from `FailproofAI/agenteye` → `evaluator-sdk/skill/` (private). Do **not** hand-edit here. |
 
-### Renamed with the product: read this before `npx skills update`
+## Naming and compatibility
 
-Two of the three mirrors were renamed upstream when AgentEye became FailproofAI Cloud. **In
-this checkout they still sit under their old folder names** - the renamed mirrors have not
-landed yet, so the folders below are what exists on disk today and what the links above point
-at. The left column is the skill name each is shipping under.
+AgentEye was renamed to FailproofAI Cloud. Skill names now follow the current product and
+package names, but runtime literals that existing software still consumes are deliberately
+preserved. Do not mechanically replace `AgentEye` everywhere.
 
-| Skill name | Folder here today | Was |
+| Skill name | Folder | Was |
 |---|---|---|
-| `fp-cloud-cli` | `skills/agenteye-cli/` | `agenteye-cli` |
-| `failproofai-sdk` | `skills/agenteye-python-sdk/` | `agenteye-python-sdk` |
-| `agenteye-evaluator` | `skills/agenteye-evaluator/` | **not renamed** - this is its real, current name upstream. Don't "fix" it |
+| `fp-cloud-cli` | `skills/fp-cloud-cli/` | `agenteye-cli` |
+| `failproofai-sdk` | `skills/failproofai-sdk/` | `agenteye-python-sdk` |
+| `agenteye-evaluator` | `skills/agenteye-evaluator/` | **unchanged** because the current distribution and import remain `agenteye-evaluator` and `agenteye_evaluator` |
 
-If `npx skills update agenteye-cli` (or `agenteye-python-sdk`) stops resolving, that is the
-rename landing, not a broken install: remove the old name and add the new one.
+The rename does not alter the `fp` or `failproofai` binaries, SDK behavior, Cloud API, saved
+credentials, or policy format. It only changes which skill identifier new installations use.
+An already-installed old skill keeps working, but updating it by its old repository name may
+no longer resolve. Migrate it once:
 
 ```bash
 npx skills remove agenteye-cli
 npx skills add FailproofAI/skills --skill fp-cloud-cli -a claude-code
+
+npx skills remove agenteye-python-sdk
+npx skills add FailproofAI/skills --skill failproofai-sdk -a claude-code
 ```
 
-Until then the old names are what `--skill` accepts, which is why the examples below use
-`failproofai` - a name that is valid on both sides of the rename.
+Legacy wire and package literals such as `X-AgentEye-*`, `ae_session`, selected
+`AGENTEYE_*` variables, `agenteye-evaluator`, and `agenteye_evaluator` remain documented where
+they are still part of the running system.
 
 ## Install
 
@@ -57,11 +73,20 @@ Using the [`skills`](https://skills.sh) CLI (`vercel-labs/skills`). It auto-dete
 your agent(s); pass `-a` to be explicit.
 
 ```bash
-# the whole collection (project-local → ./.agents/skills/)
+# Install every skill in this repository.
+# The agent receives the master skill plus every focused specialist.
 npx skills add FailproofAI/skills
 
-# just one skill
-npx skills add FailproofAI/skills --skill skillname
+# Install the complete product context as one self-contained skill.
+npx skills add FailproofAI/skills --skill failproofai-master
+
+# Install the setup/operations entry point only.
+npx skills add FailproofAI/skills --skill failproofai
+
+# Install one focused specialist.
+npx skills add FailproofAI/skills --skill failproofai-policy-author
+npx skills add FailproofAI/skills --skill failproofai-policy-publish
+npx skills add FailproofAI/skills --skill fp-cloud-cli
 
 # explicitly for claude-code
 npx skills add FailproofAI/skills -a claude-code
@@ -79,10 +104,25 @@ npx skills add FailproofAI/skills --skill failproofai -a codex
 Or point straight at the skill folder by URL:
 `npx skills add https://github.com/FailproofAI/skills/tree/main/skills/failproofai -a claude-code`
 
-Pass the name **as it exists in the repo right now** - `--skill` and a URL path segment both
-resolve against the folder, so the two renamed mirrors still answer to `agenteye-cli` and
-`agenteye-python-sdk` here. `npx skills add FailproofAI/skills --list` is the authoritative
-list; see [Renamed with the product](#renamed-with-the-product-read-this-before-npx-skills-update).
+Pass the skill name exactly as listed above. `npx skills add FailproofAI/skills --list` is
+the authoritative list.
+
+### What each install gives the agent
+
+`npx skills add FailproofAI/skills --skill failproofai-master` installs one folder. That
+folder contains its own complete product reference; it does not download or invoke the other
+skills as hidden dependencies. Its directory tells the agent which focused skill to prefer
+when those skills are also installed.
+
+`npx skills add FailproofAI/skills` installs every discovered skill in the repository. The
+agent can then route a task to the narrowest matching skill—for example authoring with
+`failproofai-policy-author`, publishing the resulting GitHub pack with
+`failproofai-policy-publish`, and operating Cloud fleet rollout with `fp-cloud-cli`.
+
+Installing a skill teaches the agent how to work with FailproofAI. It does not silently
+install product binaries, sign into Cloud, publish releases, change fleet policy, or mutate a
+user's machine. Those actions happen only when the user requests them and the selected skill's
+workflow calls for them.
 
 Inspect / verify / manage:
 ```bash
@@ -131,7 +171,7 @@ skills/                         ← this repo
     │   │                           harnesses · audits · sessions · cloud · cli
     │   │                           troubleshooting
     │   └── agents/openai.yaml
-    ├── failproofai-complete/    ← the whole product, one artifact
+    ├── failproofai-master/      ← the whole product, one artifact
     │   ├── SKILL.md
     │   ├── references/          ← commands · verticals · setup · directory
     │   │                           env-vars · literals · glossary
@@ -142,15 +182,15 @@ skills/                         ← this repo
     │   │                           rules-files · traps
     │   ├── scripts/             ← runnable helpers (test a policy, sync a reference)
     │   └── agents/openai.yaml
-    ├── failproofai-policy-deploy/
+    ├── failproofai-policy-publish/
     │   ├── SKILL.md
-    │   ├── references/          ← cloud-lane · local-lane · packs
+    │   ├── references/          ← publishing and policy-pack semantics
     │   └── agents/openai.yaml
-    ├── agenteye-cli/            ← mirror · ships as `fp-cloud-cli`
+    ├── fp-cloud-cli/            ← mirror · Cloud CLI
     │   ├── SKILL.md
     │   ├── references/commands.md
     │   └── agents/openai.yaml
-    ├── agenteye-python-sdk/     ← mirror · ships as `failproofai-sdk`
+    ├── failproofai-sdk/         ← mirror · Python SDK
     │   ├── SKILL.md
     │   ├── references/          ← events · install · integration
     │   └── agents/openai.yaml

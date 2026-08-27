@@ -267,7 +267,8 @@ and **nothing it drafts is published or deployed automatically**; a "no policy" 
 result is a real answer meaning use an alert, a workflow change, or a human. From a draft
 onward the CLI does carry the whole lane — `fp policies compose` / `test` / `publish`, then
 `fp fleet deploy` — so do not tell anyone the rest is dashboard work. Route authoring to
-`failproofai-policy-author` and the publish-and-deploy half to `failproofai-policy-deploy`.
+`failproofai-policy-author`, GitHub pack publication to `failproofai-policy-publish`, and
+Cloud fleet rollout to `fp-cloud-cli`.
 
 ### Alerts
 

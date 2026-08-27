@@ -78,12 +78,6 @@ agenteye:evaluator-sdk/skill/    ──▶  skills/agenteye-evaluator/  (workflo
 `FailproofAI/agenteye` is private; you need push access to the upstream repo to
 re-run any of these workflows.
 
-**The first two folders don't exist yet.** The renamed mirrors have not landed,
-so in this checkout they still sit at `skills/agenteye-cli/` and
-`skills/agenteye-python-sdk/` — those are the folders that are do-not-hand-edit
-today. When the renamed sync lands it creates the new folder; delete the old one
-in the same PR rather than leaving two copies to disagree with each other.
-
 `agenteye-evaluator` is **not** a stale name. It is what the skill, the
 distribution (`agenteye-evaluator`) and the module (`agenteye_evaluator`) are
 still called upstream — renaming it here breaks the sync.
@@ -95,7 +89,7 @@ top of not hand-editing the mirrored folder: don't add your own commits to a
 `sync/*` branch either — the next run discards them without warning. Changes
 outside the mirrored folder (a README row, this file) go in a normal PR.
 
-Everything else under `skills/` — `failproofai`, `failproofai-complete`,
-`failproofai-policy-author`, `failproofai-policy-deploy` — is maintained here and
+Everything else under `skills/` — `failproofai`, `failproofai-master`,
+`failproofai-policy-author`, `failproofai-policy-publish` — is maintained here and
 edited normally. If a mirror is wrong, fix it upstream or carry the correction in
 one of those four; never patch the mirror in place.

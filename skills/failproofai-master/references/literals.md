@@ -120,11 +120,11 @@ the wrong half installs nothing.
 | `agenteye-evaluator` | — | **not renamed upstream.** Keep this name when cross-referencing it |
 | `failproofai` | — | maintained in this repo |
 | `failproofai-policy-author` | — | maintained in this repo |
-| `failproofai-policy-deploy` | — | new |
-| `failproofai-complete` | — | this skill |
+| `failproofai-policy-publish` | — | new |
+| `failproofai-master` | — | this skill |
 
 **The three mirrors are marked "do not hand-edit."** Never edit files under
-`skills/agenteye-cli/`, `skills/agenteye-python-sdk/` or `skills/agenteye-evaluator/`. If one
+`skills/fp-cloud-cli/`, `skills/failproofai-sdk/` or `skills/agenteye-evaluator/`. If one
 of them contradicts this page, the fix belongs upstream — and the directory name on disk may
 lag the shipped skill name, which is not a discrepancy to correct locally.
 

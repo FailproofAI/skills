@@ -3,7 +3,7 @@
 Enabling, installing, packaging, and what makes a policy stop running — on **this machine**.
 Everything about policy *source* — the JS API, `match`, `allow`/`instruct`/`deny`, testing a
 rule — belongs to **`failproofai-policy-author`**. Publishing a version and pushing it to
-machines belongs to **`failproofai-policy-deploy`**; stay here for where a cloud-managed
+machines belongs to **`fp-cloud-cli`**; stay here for where a cloud-managed
 policy lands on disk and how it behaves once it has. Anchors are grep targets in the
 `failproofai` package.
 
@@ -136,7 +136,7 @@ failproofai policies show acme/guard      # what it holds, before installing
 Bare `policies add` / `policies remove` needs a terminal and **exits 1 without one** — the
 no-TTY refusal is checked before the empty-state branch, so a script gets
 `` `policies <action>` with no name needs a terminal to show you the list. `` plus the two
-scriptable spellings. **The pack half of this lane belongs to `failproofai-policy-deploy`**;
+scriptable spellings. **The publishing half of this lane belongs to `failproofai-policy-publish`**;
 what follows is the policy-name half.
 
 Exactly one name, default scope `user` (`bin/failproofai.mjs`). Two or more positionals is a
@@ -314,7 +314,7 @@ Env: `FAILPROOFAI_PACK_DIR` (pack root), `FAILPROOFAI_PACK_BASE_URL` (mirror —
 URLs *and* the latest redirect), `FAILPROOFAI_NO_DOWNLOAD` (refuse to fetch; installed packs
 keep enforcing). Installs send **no `Authorization` header at all**, by design — which is why
 a private repo publishes to nobody. **Publishing a pack of your own is
-`failproofai-policy-deploy`'s** (`failproofai publish`), as is the full source grammar.
+`failproofai-policy-publish`'s** (`failproofai publish`), as is the full source grammar.
 
 ## Cloud-managed vs local
 
@@ -343,7 +343,7 @@ unconnected (grep `clearActiveCloudManagedPolicies`).
 guardrails`: compose, test, publish, deploy, then watch what enforcement did. Any note in
 this repo saying assignment, promotion or rollback is "dashboard work" or "not exposed by the
 cloud CLI" is stale, and believing it stops an agent looking for commands that ship.
-**`failproofai-policy-deploy` owns that lane in depth** — go there for the full grammar. Three
+**`fp-cloud-cli` owns that Cloud deployment lane in depth** — go there for the full grammar. Three
 facts belong on this side of the boundary, because they decide what a machine ends up
 enforcing:
 

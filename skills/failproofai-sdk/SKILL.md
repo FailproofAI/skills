@@ -1,26 +1,26 @@
 ---
-name: agenteye-python-sdk
+name: failproofai-sdk
 description: |-
-  The way to make an AI agent report what it did to AgentEye — planning what to record, writing the instrumentation, and proving the events land. Reach for it on vague phrasing too: "add observability to my agent", "why isn't my agent showing up?"
+  The way to make an AI agent report what it did to Failproof AI — planning what to record, writing the instrumentation, and proving the events land. Reach for it on vague phrasing too: "add observability to my agent", "why isn't my agent showing up?"
 
   Trigger when the user wants to:
   • plan an integration — which points in their agent loop to record, and what the platform must see before sessions, errors, and evals work at all;
-  • write or fix instrumentation — add the `agenteye` Python SDK to an agent codebase, thread session/agent identity through it, emit tool, model, hook, or human events;
+  • write or fix instrumentation — add the `failproofai_sdk` Python SDK to an agent codebase, thread session/agent identity through it, emit tool, model, hook, or human events;
   • verify it — confirm events are being written, or debug an integration that looks correct and produces nothing.
 
-  Served by the `agenteye` Python SDK, inside the user's own agent.
+  Served by the `failproofai_sdk` Python SDK, inside the user's own agent.
 
-  NOT for reading telemetry that already landed or operating a deployment (that's `agenteye-cli`), or building the evaluator service that scores runs (that's `agenteye-evaluator`).
+  NOT for reading telemetry that already landed or operating a deployment (that's `fp-cloud-cli`), or building the evaluator service that scores runs (that's `agenteye-evaluator`).
 ---
 
-# AgentEye Python SDK
+# Failproof AI Python SDK
 
 The SDK records what your agent did, from inside your agent. You call it at points
 you choose; it appends structured events to local `.jsonl` files. A separate
 collector ships those files to the platform.
 
 ```
-your agent calls agenteye.event.*
+your agent calls failproofai_sdk.event.*
   → SDK queues it in memory
   → flush thread writes <base_dir>/events/event-<timestamp>.jsonl
   → collector picks the file up and ships it
@@ -36,34 +36,42 @@ The API is small — 15 event methods, all keyword-only. The hard parts are
 this SDK does not raise when you get it wrong. Sections 1-3 are the plan, 4 is the
 code, 5-6 are the proof.
 
-## 1. Install it — and do not trust the obvious command
+## 1. Install it
 
-**`pip install agenteye` does not install this SDK.** It installs the AgentEye
-*CLI*, a different product that happens to publish under the same distribution
-name on public PyPI. The result is quiet and confusing:
+```bash
+pip install failproofai-sdk        # or: uv add failproofai-sdk
+```
 
-- `pip install agenteye` → you get the CLI → `import agenteye` raises
-  `ModuleNotFoundError`, because the CLI ships the module `agenteye_cli`.
-- Worse, if the SDK **is** already installed, `pip install agenteye` *removes it*
-  and puts the CLI there instead. Same distribution name, higher version number.
-  Your agent's `import agenteye` breaks at the next deploy, and nothing in the
-  output says so.
+The distribution is `failproofai-sdk` and the import is `failproofai_sdk`. Public
+PyPI, no token, no dependencies.
 
-The SDK ships as a private wheel from GitHub Releases, not from an index.
-`references/install.md` has the ladder (token, download, install, pin).
+**One command to never run: `pip install agenteye`.** That name belongs to a
+stranded release of an old CLI — a different product that shipped under it before
+moving to `fp-cloud-cli`. PyPI versions cannot be withdrawn, so the name still resolves
+to that build forever. You get the CLI, `import failproofai_sdk` raises
+`ModuleNotFoundError`, and on a codebase still using the pre-rename SDK (which
+published under `agenteye` too) pip treats it as an upgrade and **removes the SDK**.
 
 > **Tell:** if a coding agent proposes `pip install agenteye` to install the SDK,
 > this skill never loaded. Stop and re-read it.
 
+The CLI is a fine thing to want — it is what reads the telemetry back. Install it
+separately, never with `pip` into your agent's environment:
+
+```bash
+pipx install fp-cloud-cli        # the command is `fp`
+```
+
 Confirm what you actually have before writing a line of instrumentation:
 
 ```bash
-python -c "import agenteye; print(agenteye.__version__)"
+python -c "import failproofai_sdk; print(failproofai_sdk.__version__)"
 ```
 
-A version like `0.0.1b9` is the SDK. `ModuleNotFoundError` means you have the CLI
-or nothing. The CLI is a fine thing to want — install it separately with `pipx` or
-`uv tool`, never with `pip` into your agent's environment.
+A version like `0.0.1b1` is the SDK. `ModuleNotFoundError` means it is not
+installed — check `pip show agenteye`, which returning anything means the wrong
+name was installed. `references/install.md` covers migrating an existing
+`import agenteye` integration.
 
 ## 2. Plan before you instrument
 
@@ -128,19 +136,51 @@ Full field-by-field catalog: `references/events.md`.
 
 Work with these; none of them raise, so none of them show up in testing.
 
-- **There is no ambient session.** No decorator, no context manager, no
-  contextvar, no `set_session()`. Every one of the 13 methods takes `session_id`
-  and `agent_id` as required keyword args, and nothing propagates them for you.
-  This is what §4 exists to solve.
+- **There IS an ambient session, and it is the ergonomic path.** `session()`,
+  `agent()` and `tool_call()` bind identity on contextvars, so `session_id` and
+  `agent_id` are optional on all 15 event methods — omitted, they resolve from
+  the enclosing scope. `current()` reads it; `propagate(fn)` carries it into a
+  new thread, which contextvars do NOT do on their own.
+
+  This section said the opposite until the scopes existed, and the reference
+  integration shipped a contextvars wrapper as markdown for customers to paste
+  into their own code. That is now in the package.
+
+  Nothing bound and nothing passed raises `TypeError` naming the fix — never a
+  silent emit, because ingest skips an event with no session and answers `200`.
+
+  Two more shapes raise, for the same reason:
+
+  | You pass | Raises | Why it cannot be allowed through |
+  | --- | --- | --- |
+  | A non-`str` id | `TypeError` | Ingest skips the event and still answers `200` |
+  | `""` or `"   "` | `ValueError` | Worse — ingest *accepts* it, and every event merges under one blank id |
 
 - **`configure()` is optional, and every call restates all of it.** It is
   keyword-only with exactly three settings:
 
   | arg | default resolution |
   |---|---|
-  | `base_dir` | `$AGENTEYE_HOME`, else `~/.agenteye` |
+  | `base_dir` | `~/.failproofai/custom-agents` (honours `$FAILPROOFAI_HOME`) |
   | `environment` | `$AGENTEYE_ENVIRONMENT`, else `"dev"` |
   | `flush_interval` | `0.5` (seconds) |
+
+  **No environment variable can move the spool out of the umbrella.**
+  `$FAILPROOFAI_HOME` relocates the umbrella itself, but `custom-agents` is
+  appended unconditionally, so the spool is always inside it. `base_dir` is the
+  only way to write anywhere else, and it is an explicit argument at the call
+  site rather than something inherited from the environment.
+
+  The default root moved here from `~/.agenteye`. `failproofaid` watches both,
+  so on a host running it nothing changes but the directory name, and batches
+  already in `~/.agenteye/events` still get collected. On a host running the
+  older `agenteye-collector` — which resolves `$AGENTEYE_HOME` or `~/.agenteye`
+  and nothing else — point **the collector** at this SDK with
+  `AGENTEYE_HOME=~/.failproofai/custom-agents`, or pass `base_dir` here.
+  Setting `AGENTEYE_HOME` no longer moves the SDK: it used to, which meant
+  exporting it for the collector silently relocated the SDK too.
+  `AGENTEYE_SPOOL_TO_FAILPROOFAI` is retired; it required a directory nothing
+  created, so it never fired.
 
   Each call *sets all three* — omitted arguments are **reset to default
   resolution**, not left alone. So a later `configure(flush_interval=1.0)`
@@ -154,6 +194,10 @@ Work with these; none of them raise, so none of them show up in testing.
   `production`. Set it explicitly via `configure(environment=...)` or the
   `AGENTEYE_ENVIRONMENT` env var. This is a favourite: everything works, in the
   wrong bucket.
+
+  **A comma raises `ValueError`.** `configure(environment="prod,eu")` is rejected
+  at the call site: ingest splits this field on commas to build filter facets, so
+  a comma would discard the whole event server-side with nothing said.
 
 - **Non-JSON payload leaves are stringified.** Events are serialized on a
   background thread. Ordinary structured JSON retains its types; unsupported
@@ -174,18 +218,22 @@ Work with these; none of them raise, so none of them show up in testing.
   (case-insensitive). `"failure"` is the natural antonym of the `"success"` in
   every example — and it silently counts as *not a failure*. The run shows green.
 
-- **You own correlation, and `tool_call_id` + `hook_id` share ONE flat map.**
-  They are keyed bare, process-wide — not per session, not per type. So they must
-  be unique across every concurrent run **and across each other**: a
-  `hook_completed(hook_id="x")` will happily pair with a pending
-  `tool_use(tool_call_id="x")` and report a confident, wrong duration. (`input_id`
-  and `pause_id` are the exceptions — they *are* scoped per session/agent, so
-  `human_wait`/`human_input` and `agent_pause`/`agent_resume` can't collide.)
+- **You own correlation, and ids are scoped per session AND per kind.**
+  Pending spans are keyed `tool:<session_id>:<tool_call_id>` and
+  `hook:<session_id>:<hook_id>`, so a `hook_completed(hook_id="x")` cannot pair
+  with a pending `tool_use(tool_call_id="x")`, and two concurrent sessions both
+  using `call_1` cannot cross-pair either. `input_id` and `pause_id` are scoped
+  the same way.
 
-  Reusing your framework's id is safe (Anthropic and OpenAI ids are globally
-  unique). Per-run counters — `call_1`, `call_2`, common in home-grown loops — are
-  **not**, and the failure is a plausible wrong number attributed to the wrong
-  run, not a missing one. A wrong duration is worse than a null.
+  What must still be unique is an id **within one session, for one kind**. The
+  pending map is a plain assignment, so emitting `tool_use(tool_call_id="call_1")`
+  twice in one session overwrites the first entry and the first `tool_result`
+  measures from the wrong start. Reusing your framework's id is always safe
+  (Anthropic and OpenAI ids are globally unique); a per-run counter is safe only
+  if you do not reset it inside a session.
+
+  If you have read older guidance describing one flat, process-wide map shared
+  between tools and hooks: that was true, and is not any more.
 
 - **`duration_ms` is computed for you on four methods only** — `tool_result`,
   `hook_completed`, `human_input`, `agent_resume` — from the matching earlier event.
@@ -198,12 +246,30 @@ Work with these; none of them raise, so none of them show up in testing.
   silently.
 
   **`SIGTERM` deserves its own line, because it is not exotic — it is every
-  rolling deploy**, every `docker stop`, every Kubernetes eviction. Python's
-  default handler exits, so `atexit` *does* run; but if your app installs its own
-  handler and calls `os._exit`, or takes longer than the grace period, the queue
-  dies with it. What is in flight at shutdown is disproportionately `agent_end`,
-  so runs never close and never reach the evaluator. If you handle `SIGTERM`,
-  flush before you exit.
+  rolling deploy**, every `docker stop`, every Kubernetes eviction, and every
+  plain `kill`. CPython installs **no** handler for it: `signal.getsignal(SIGTERM)`
+  is `SIG_DFL`, the OS terminates the process where it stands, and **`atexit`
+  does not run**. Whatever is queued is gone — and what is in flight at shutdown
+  is disproportionately `agent_end`, so runs never close and never reach the
+  evaluator. The 0.5s flush interval is what bounds the loss, not the exit path.
+
+  So if your process can receive `SIGTERM`, handle it — the SDK will not install
+  a handler in your process behind your back:
+
+      import signal, sys, failproofai_sdk
+
+      def _flush_and_exit(signum, frame):
+          failproofai_sdk._writer.flush_now()
+          sys.exit(128 + signum)
+
+      signal.signal(signal.SIGTERM, _flush_and_exit)
+
+  (`sys.exit` here rather than `os._exit`: it unwinds, so any `agent()` scope
+  still open emits its `agent_end` before the flush. That scope closes
+  `outcome="failed"` with an `error` naming `SystemExit`, because an evicted run
+  did not finish — which is the thing you want to be able to see.) `SIGKILL`,
+  `os._exit` and a container OOM cannot be handled by anything, and drop the
+  queue silently.
 
 ## 4. Write it
 
@@ -211,7 +277,7 @@ Threading `session_id` and `agent_id` through every call site by hand is the thi
 that makes integrations ugly and abandoned. Don't. Bind identity once per run and
 let the call sites read it.
 
-`references/integration.md` has the canonical `contextvars` wrapper — one small
+`references/frameworks.md` covers the four adapters. `references/integration.md` has the hand-written wrapper — one small
 module, correct under `asyncio` and threads, adaptable to any codebase — plus
 worked shapes for a tool dispatcher, an LLM client wrapper, and framework-specific
 callback layers. Read it before writing your own; the naive version (a module
@@ -226,27 +292,39 @@ has a request context or a trace id, bind to that instead of inventing one.
 **This is the whole point of the file boundary: you can prove the integration
 without a server.** Run the agent and look.
 
+Resolve the spool the way the SDK does, rather than guessing at a path:
+
 ```bash
-ls -la ~/.agenteye/events/          # or "$AGENTEYE_HOME"/events/ if you set it
+python -c "import failproofai_sdk._resolver as r; print(r.get_base_dir() / 'events')"
 ```
 
-You are looking for `event-<UTC timestamp>.jsonl` files. Each line is one event.
-Read them with a JSON parser, not `grep` — the exact spacing of the output is not
-a contract, and a grep for `"type":"agent_start"` returns nothing on a perfectly
-healthy integration:
+That prints `~/.failproofai/custom-agents/events` unless the application called
+`configure(base_dir=...)`. `$FAILPROOFAI_HOME` moves the `~/.failproofai` part
+and nothing else. `$AGENTEYE_HOME` does **not** affect it — that variable belongs
+to the older `agenteye-collector`, which reads it to decide what to WATCH.
 
 ```bash
-cat ~/.agenteye/events/*.jsonl | python -m json.tool --json-lines | head -20
+ls -la ~/.failproofai/custom-agents/events/
+```
+
+You are looking for `event-<UTC timestamp>-<pid>-<seq>.jsonl` files — the pid and
+sequence number are what keep two processes flushing in the same millisecond from
+overwriting each other. Each line is one event. Read them with a JSON parser, not
+`grep` — the exact spacing is not a contract, and a grep for `"type":"agent_start"`
+returns nothing on a perfectly healthy integration:
+
+```bash
+cat ~/.failproofai/custom-agents/events/*.jsonl | python -m json.tool --json-lines | head -20
 ```
 
 Then check, in this order — the first failure explains everything downstream:
 
 1. **Any files at all — or do they stop mid-run?** Look at stderr for
-   `Exception in thread agenteye-flush`. **This is the first thing to check and
+   `Exception in thread failproofai-sdk-flush`. **This is the first thing to check and
    the worst thing to miss**: one non-JSON-serializable value killed the writer,
    and everything after it — including the at-exit flush — is gone (§3). The tell
    is that events stop for *every* type at once, and nothing raised. If instead
-   there were never any files: did `import agenteye` succeed (§1)? Is the base dir
+   there were never any files: did `import failproofai_sdk` succeed (§1)? Is the base dir
    writable? Did the process die hard (`SIGKILL`, `docker stop`, an OOM) before a
    flush?
 2. **Is `agent_start` there, once per run?** No → you will see events on the
@@ -270,19 +348,23 @@ Then check, in this order — the first failure explains everything downstream:
 A test-mode loop that costs nothing:
 
 ```bash
-export AGENTEYE_HOME=/tmp/agenteye-test
-rm -rf /tmp/agenteye-test && python your_agent.py
-cat /tmp/agenteye-test/events/*.jsonl | python -m json.tool --json-lines
+export FAILPROOFAI_HOME=/tmp/failproofai-sdk-test
+rm -rf /tmp/failproofai-sdk-test && python your_agent.py
+cat /tmp/failproofai-sdk-test/custom-agents/events/*.jsonl | python -m json.tool --json-lines
 ```
 
-`AGENTEYE_HOME` sends events somewhere disposable, so you can iterate on the
+`FAILPROOFAI_HOME` sends events somewhere disposable, so you can iterate on the
 integration without touching the real directory or shipping test runs to the
-platform. Note the SDK reads it late, per flush — so set it before you start the
-process, not halfway through.
+platform. Note the `custom-agents` segment in the read path — the SDK appends it
+unconditionally. Note too that the SDK reads the variable late, per flush, so set
+it before you start the process, not halfway through.
+
+`AGENTEYE_HOME` used to do this job and no longer does anything to the SDK; using
+it here would write to your REAL spool while you read an empty temp directory.
 
 **Do not verify by installing the CLI into your agent's environment.** It will
 uninstall the SDK you just integrated (§1). Reading back what landed on the
-platform is the `agenteye-cli` skill's job, from a separate environment.
+platform is the `fp-cloud-cli` skill's job, from a separate environment.
 
 ## 6. Production — the collector has to agree with you
 
@@ -294,18 +376,21 @@ the SDK is writing to**. That is the whole contract, and both halves fail
 silently:
 
 - Collector not running → files pile up in `events/` forever. The SDK is fine.
-- Collector reading a different base dir than the agent writes to — a different
-  `AGENTEYE_HOME`, a different user's `~`, a container path that isn't mounted —
-  → files pile up in a directory nobody reads. The SDK is fine.
+- Collector reading a different base dir than the agent writes to — the
+  collector's own `AGENTEYE_HOME` pointing somewhere else, a different user's
+  `~`, a container path that isn't mounted → files pile up in a directory nobody
+  reads. The SDK is fine. (`failproofaid` watches both
+  `~/.failproofai/custom-agents/events` and `~/.agenteye/events`, so it is the
+  half of this pair least likely to be misconfigured.)
 
 So when events are on disk but not on the platform, the SDK is not the suspect.
 Compare the two paths first: print the directory your agent is actually writing to
-(`python -c "import agenteye._resolver as r; print(r.get_base_dir())"` in the
+(`python -c "import failproofai_sdk._resolver as r; print(r.get_base_dir())"` in the
 agent's own environment, with the agent's own env vars) and check the collector is
 running and pointed at the same one. A `.jsonl` count that only grows is the tell.
 
 Confirming events arrived on the *platform* is deliberately not this skill's job —
-that is the `agenteye-cli` skill, from a **separate environment** (§1). Collector
+that is the `fp-cloud-cli` skill, from a **separate environment** (§1). Collector
 setup and deployment are your platform's own documentation.
 
 If the files look right (§5) and the collector is running against the same
