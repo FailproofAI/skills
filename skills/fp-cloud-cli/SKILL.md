@@ -5,11 +5,12 @@ description: |-
 
   Trigger when the user wants to:
   • inspect agent telemetry — did agents error/fail/go flaky; sessions, events, latency, token usage, slowest models; eval/quality scores and whether quality dropped;
-  • operate the deployment — ack/assign/resolve/mute/dismiss issues (alerts, reports, and audit findings) with notes; run and triage audits; see who has access and change roles (e.g. read-only); create or scope API keys (e.g. a push-only CI key); change settings; run saved or ad-hoc ClickHouse queries.
+  • operate the deployment — triage issues and audits; manage access, keys, settings, and queries;
+  • manage Cloud enforcement — compose/test/publish policy versions, deploy them to fleet machines, inspect guardrails, promote, or roll back.
 
   Served by the `fp` CLI against FailproofAI Cloud.
 
-  NOT for evaluator scoring (`agenteye-evaluator`), instrumenting an app (`failproofai-sdk`, imported as `failproofai_sdk`), debugging the collector/daemon, or unrelated dev work (build failures, rotating non-FailproofAI Cloud secrets).
+  NOT for publishing reusable GitHub policy packs (`failproofai-policy-publish`), evaluator scoring (`agenteye-evaluator`), instrumenting an app (`failproofai-sdk`), or debugging the local collector/daemon.
 ---
 
 # FailproofAI Cloud CLI

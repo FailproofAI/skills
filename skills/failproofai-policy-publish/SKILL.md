@@ -1,7 +1,7 @@
 ---
 name: failproofai-policy-publish
 description: |-
-  Package policies written with FailproofAI and publish them as an installable policy pack on GitHub. Use after `failproofai-policy-author` when the policy works locally and the user wants to share, version, release, or install it through `failproofai publish` and `failproofai policies add <owner>/<repo>`.
+  Package policies written with FailproofAI and publish them as an installable policy pack on GitHub. Use after `failproofai-policy-author` when the policy works locally and the user wants to share, version, release, or install it through `failproofai publish` and `failproofai policies add owner/repository`.
 
   Covers initializing a pack, validating it locally, choosing policy metadata and defaults, Git/GitHub prerequisites, dry runs, publishing release assets, previewing the release, and verifying installation on a clean machine.
 

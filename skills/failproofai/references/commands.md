@@ -989,7 +989,7 @@ is the map; `skills/failproofai/references/cli.md` is the authority on every edg
 | `policies add\|remove <name>` | `--scope`, `--cli`, `--beta` **only** — `--custom` is a hard error here |
 | `policies add\|remove <owner>/<repo>` | The **pack** lane, chosen by the slash: `[--policy a,b\|--only a,b] [--category x,y] [--all] [--cli <agent>…]`. `--scope` is ignored — a pack install is machine-level |
 | `policies show <owner>/<repo>` | `--releases`. Manifest only; no code is fetched |
-| `publish [<entry.mjs>]` | `--repo <owner>/<repo>`, `--id`, `--version`, `--tag`, `--notes`, `--out <dir>`, `--effect enforce\|observe`, `--commit`, `--dry-run`, `--allow-private`, `--init [file]` |
+| `publish [<entry.mjs>]` | `--repo <owner>/<repo>`, `--id`, `--version`, `--tag`, `--notes`, `--out <dir>`, `--effect enforce\|observe`, `--dry-run`, `--init [file]` |
 | `harness` | `harness list [<h>]`, `add-path <h> [<label>=]<path>`, `remove-path <h> <path\|label>`. No flags on any |
 | `audit` | `--schedule [days]`, `--no-schedule`, `--email <a>`, `--status`. Not composable — each rejects every other argument |
 | `backfill` | `--since <30d\|6m\|YYYY-MM-DD>`, `--dry-run` |

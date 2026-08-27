@@ -45,7 +45,10 @@
         "PermissionRequest"
       ],
       "toolNames": [
-        "Bash"
+        "Bash",
+        "Write",
+        "Edit",
+        "NotebookEdit"
       ],
       "defaultEnabled": true,
       "alwaysOn": true

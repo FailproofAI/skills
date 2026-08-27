@@ -67,8 +67,8 @@ Using the [`skills`](https://skills.sh) CLI (`vercel-labs/skills`). It auto-dete
 your agent(s); pass `-a` to be explicit.
 
 ```bash
-# Recommended: install the umbrella and every focused companion.
-npx skills add FailproofAI/skills
+# Recommended: install every skill for detected agents, without prompts.
+npx skills add FailproofAI/skills -y
 
 # Install only the complete, self-contained umbrella skill.
 npx skills add FailproofAI/skills --skill failproofai
@@ -104,7 +104,9 @@ with the complete product reference. It does not download or invoke the focused 
 hidden dependencies, and it does not require them to answer product questions or perform the
 core setup and operations workflows.
 
-`npx skills add FailproofAI/skills` installs every discovered skill in the repository. The
+`npx skills add FailproofAI/skills -y` installs every discovered skill for the agents detected
+on the machine without prompting. Running the command without `-y` opens the interactive selector.
+The
 agent can then route a task to the narrowest matching skill—for example authoring with
 `failproofai-policy-author`, publishing the resulting GitHub pack with
 `failproofai-policy-publish`, and operating Cloud fleet rollout with `fp-cloud-cli`.

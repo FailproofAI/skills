@@ -75,6 +75,12 @@ if (!toolMaps) {
   process.exit(2);
 }
 const CLIS = cap.clis;
+// Claude's tool names are already canonical, so they do not appear as keys in
+// its empty rename map. Values across the other harness maps give us the
+// canonical vocabulary and let direct names such as Bash count as reachable.
+const canonicalNames = new Set(
+  Object.values(toolMaps).flatMap((mapping) => Object.values(mapping)),
+);
 
 // ------------------------------------------------------------------- input
 
@@ -130,6 +136,7 @@ const mapped = [];
 const raw = [];
 for (const t of tools) {
   const canon = {};
+  if (canonicalNames.has(t)) canon.direct = t;
   for (const cli of CLIS) {
     const c = toolMaps[cli]?.[t];
     if (c) canon[cli] = c;

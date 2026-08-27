@@ -1,16 +1,15 @@
 # The skill family and the docs behind it
 
-Seven skills cover FailproofAI. They overlap deliberately at the edges and refuse each
+Six skills cover FailproofAI. They overlap deliberately at the edges and refuse each
 other's work in the middle, so the routing sentence matters more than the description: pick
 on **what the user is trying to change**, not on which nouns they said.
 
-    failproofai ─────────────► the way in. Orients, sets a machine up, routes.
+    failproofai ─────────────► the complete umbrella: knows, sets up, operates, routes
          ├── failproofai-policy-author ──► decide what to enforce, write it, prove it decides
          ├── failproofai-policy-publish ─► publish a GitHub pack others can install
          ├── fp-cloud-cli ───────────────► query and administer FailproofAI Cloud
          ├── failproofai-sdk ────────────► instrument an agent that is not one of the 12 CLIs
-         ├── agenteye-evaluator ─────────► decide what to score, build the scoring service
-         └── failproofai ────────────────► all of it, at full depth, in one skill
+         └── agenteye-evaluator ─────────► decide what to score, build the scoring service
 
 ## Install any of them
 
@@ -25,26 +24,27 @@ with that command.
 
 ## Three of these are mirrors
 
-`fp-cloud-cli`, `failproofai-sdk` and `agenteye-evaluator` are **synced from upstream
-(`FailproofAI/failproofai`) and marked do-not-hand-edit.** Patching them here is a
+`fp-cloud-cli` and `failproofai-sdk` are synced from `FailproofAI/failproofai`;
+`agenteye-evaluator` is synced from the private `FailproofAI/agenteye` repository. All three
+are marked **do-not-hand-edit.** Patching them here is a
 maintenance bug: the next sync silently reverts your change, and in the meantime two copies
 of the same claim disagree. Fix upstream, or carry the correction in a skill that is
-maintained here — `failproofai`, `failproofai-policy-author`, `failproofai-policy-publish`,
-`failproofai`.
+maintained here — `failproofai`, `failproofai-policy-author`, and
+`failproofai-policy-publish`.
 
 Two of the three were renamed with the product; the evaluator was not. **`agenteye-evaluator`
 is its real current name** — do not "fix" it. The renamed mirror folders now match their
 shipped skill names: `skills/fp-cloud-cli/` and `skills/failproofai-sdk/`.
 
-## The seven
+## The six
 
-### `failproofai` — the way in
+### `failproofai` — the complete umbrella
 
 | | |
 |---|---|
-| **Owns** | orientation (what the product is, which half does what), installing and connecting a machine, the daemon, hooks across 12 agent CLIs, backfill/flush/capture paths, upgrade and uninstall, the local audit, keys and org *concepts*, self-hosting |
-| **Refuses** | authoring a policy, rolling one out, driving the cloud CLI, evaluator scoring, the SDK. It routes to those |
-| **Route to it when** | the user is changing what is installed or connected on a machine — or does not yet know which piece of the product they need |
+| **Owns** | the complete product context: both binaries, setup, daemon, telemetry, policies, packs, Cloud fleet operations, SDK instrumentation, evaluator concepts, commands, terminology, and troubleshooting |
+| **Refuses** | nothing inside the product. It routes to focused siblings when installed but remains capable on its own |
+| **Route to it when** | the user needs setup or troubleshooting, spans multiple product areas, asks what FailproofAI can do, or only one standalone skill is installed |
 | **Install** | `npx skills add FailproofAI/skills --skill failproofai -a claude-code` |
 | **Maintained** | in this repo |
 
@@ -119,16 +119,6 @@ which is why "my events never appear" splits between this skill and `failproofai
 
 The one skill that keeps the old name, because the package did: distribution
 `agenteye-evaluator`, module `agenteye_evaluator`, user-agent `agenteye-server/<version>`.
-
-### `failproofai` — all of it
-
-| | |
-|---|---|
-| **Owns** | the whole product at full depth in one skill: both binaries' complete command surfaces, every vertical (observe, enforce, audit, administer, instrument, evaluate), env vars, the literals that must never be renamed, the glossary, and this directory |
-| **Refuses** | nothing on the product — which is exactly why it is the *last* resort, not the first. It is large |
-| **Route to it when** | a specialist's summary has run out, the question spans three or more of them at once, or the user explicitly wants the full reference |
-| **Install** | `npx skills add FailproofAI/skills --skill failproofai -a claude-code` |
-| **Maintained** | in this repo |
 
 ## Naming, so cross-references resolve
 

@@ -472,7 +472,7 @@ Collected here because getting one wrong wastes a turn or hangs the session:
 | Every `failproofai` command and flag, env vars, on-disk paths | `references/cli.md` |
 | Symptom → check → cause → fix, in depth | `references/troubleshooting.md` |
 | End-to-end setup across the local and Cloud halves | `references/end-to-end-setup.md` |
-| Complete command catalog for both binaries | `references/command-catalog.md` |
+| Complete command catalog for both binaries | `references/commands.md` |
 | Observe, enforce, evaluate, audit, and manage as product workflows | `references/product-verticals.md` |
 | Environment variables and configuration locations | `references/env-vars.md` |
 | Legacy literals that must not be renamed | `references/literals.md` |
