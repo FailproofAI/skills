@@ -12,7 +12,7 @@ a machine that was never meant to have it.
 | Vertical | Local | Cloud | Owns the depth |
 |---|---|---|---|
 | Observe | hook activity + transcripts on disk, dashboard at `127.0.0.1:8020` | `events` `sessions` `errors` | `fp-cloud-cli` |
-| Enforce | 39 builtins + custom policies, hooks in 12 harnesses | `policies` `fleet` `guardrails` | `failproofai-policy-author`, `failproofai-policy-deploy` |
+| Enforce | packs you install + custom/convention policies, hooks in 12 harnesses | `policies` `fleet` `guardrails`, the backtest in the dashboard | `failproofai-policy-author`, `failproofai-policy-deploy` |
 | Evaluate | — nothing | `evals` + an evaluator service you host | `agenteye-evaluator` |
 | Audit | `failproofai audit`, offline, no account | `audits` → findings → `issues` | `failproofai`, `fp-cloud-cli` |
 | Manage | — nothing | `orgs` `keys` `users` `query` `alerts` `settings` `usage` | `fp-cloud-cli` |
@@ -93,14 +93,23 @@ looking for commands that exist.
 ## The lifecycle
 
 ```
-compose  →  test  →  publish  →  fleet deploy  →  guardrails
-draft it    prove it   mint a       put it on      watch what
-            decides    version      machines       it actually did
+draft  →  backtest  →  test  →  publish  →  fleet deploy  →  guardrails
+write it  would it     does it  mint a      put it on        watch what it
+          fire, and    decide   version     machines         actually did
+          can it
+          block?
 ```
+
+**The backtest comes before `policies test`, not after it.** `policies test` proves a draft
+*decides* on one context you typed. The backtest replays it against traffic that really
+happened and answers the two questions that decide whether it is worth deploying at all: does
+it fire on real failures, and can the hook it fires on actually block? A draft that fails the
+second question is correct and inert, and no amount of local testing reveals that.
 
 | The question | The command | The trap |
 |---|---|---|
-| "write me a policy that blocks X" | `fp policies compose "block force pushes to main"` | Needs **`policies:write`, not `agent:use`** — backwards from the name |
+| "write me a policy that blocks X" | `fp policies compose "block force pushes to main"` | Needs **`policies:write`, not `agent:use`** — backwards from the name. It is a single model call: **the draft has never been replayed against anything** |
+| "would it have fired on real traffic?" | dashboard → `/<org>/policy-editor` → pick agent + window, `run backtest` | **No CLI surface.** There is no `fp policies backtest`. Anything claiming one is wrong |
 | "does it actually deny that?" | `fp policies test ./rule.mjs --command "git push --force origin main"` | Proves it parses, registers and decides. **Cannot** prove the daemon feeds it the same context |
 | "ship it" | `fp policies publish no-force-push ./rule.mjs` | ***Publishing deploys nothing.*** It mints a version that sits unused |
 | "put it on the machine" | `fp fleet deploy <machine-id> --add no-force-push:observe` | ***A bare `--add` enforces.*** Omit `:observe` and it is live |
@@ -109,6 +118,51 @@ draft it    prove it   mint a       put it on      watch what
 | "did it block anything?" | `fp guardrails summary --since 24h` | Bare `fp guardrails` prints help and exits 2. The summary is a named subcommand |
 | "turn it off everywhere" | `fp policies disable <id> --yes` | **`delete` does not stop enforcement.** Machines already carrying an archived policy keep running it |
 | "undo that deploy" | `fp fleet rollback <machine-id> <generation>` | Mints a *new* generation carrying the old set. History stays append-only |
+
+## What the backtest tells you, and what it cannot
+
+Read the verdict before the numbers. **Enforceability is judged before precision**, so a
+post-call catch scoring 100% is refused rather than shipped — on most harnesses a post-call
+deny is discarded, and a reactive catch can be perfectly correct and completely inert.
+
+| Verdict | What it means | What to do |
+|---|---|---|
+| `shippable` | fires predominantly on real failures, at a hook that blocks | publish it |
+| `narrow` | ≥80% precision, thin coverage | publish it; it will not cover everything |
+| `drowns` | under 80% precision | tighten the match. Do not deploy |
+| `observe-only` | fires on real failures at a hook this harness cannot block | redraft as a `PreToolUse` preflight, or deploy it as an alert |
+| `never-fires` · `matched-no-fire` | matched nothing, or watched the right calls and acted on none | usually the wrong event |
+| `unreplayable` | matches only `Stop`/`UserPromptSubmit`, which a tool-call replay never synthesises | the zero is not a verdict |
+
+`enforceable === 0` with `fired > 0` means inert. `enforceable` *absent* means an older result
+and must never be read as zero.
+
+Four gaps are declared, and each decides whether to trust a green result:
+
+- **Builtins first, before any backtest.** The composer never considers builtins and the replay
+  loads none, so a draft that duplicates one can score `shippable` and then never fire in
+  production, because the builtin already decided. Check what is already installed *before*
+  drafting.
+- **The numbers measure aim, not outcome.** The recorded agent cannot react: a deny did not
+  stop the call, and everything after it in that session still happened. 67% precision is not
+  "67% of failures prevented".
+- **Candidacy refuses about half of cross-call findings.** A headline like "retried 14 times"
+  describes an effect no single call can be judged on. Put the enforceable action in the title
+  and re-run it.
+- **Refinement does not widen coverage.** `narrow` stops the loop honestly, but the round after
+  it rewrites the matcher wholesale and makes precision *worse*. Keep the better round.
+
+Measured on the project's own seeded corpus (7542 events, synthetic), the three shapes:
+
+| Draft | Fired | On real failures | Precision | Verdict |
+|---|---|---|---|---|
+| preventive rule on a mostly-succeeding tool | 262 | 50 | 19% — 5.2× noise | `drowns` |
+| post-call catch, correct but inert | 19 | 19 | 100%, `enforceable=0` | `observe-only` |
+| `PreToolUse` rule on a wholly-broken tool | 22 | 22 | 100%, enforceable | `shippable` |
+
+**Backtesting and observe mode are complements, not substitutes.** The backtest asks what a
+policy would have done to calls already made — fast, free, blind to the agent reacting.
+Deploying with `:observe` asks what it is doing to calls being made now — slower, exact.
 
 ## The three that bite hardest
 
@@ -154,17 +208,41 @@ authenticates against; the refusal fires before any HTTP call, so nothing half-r
 changes it. Plan the rollout as something a person runs, and put only `policies test` in the
 pipeline — it needs no server, no fleet and no auth, just `node` on PATH.
 
+The backtest is not scriptable either, for a different reason: it has no CLI at all. It is a
+dashboard surface, it runs caller-supplied code in a sandbox on the agent service, and its
+slots are capped instance-wide — a `429` there means *wait*, not *broken*.
+
 ## The local half
 
-Enforcement on one machine needs no account at all: 39 builtins, custom policies, hooks
-installed into 12 harnesses. `failproofai policies --install`, `failproofai policy add <name>`.
-Two silent-blast-radius traps live there — `policies --uninstall --scope all` has no
-confirmation prompt, and with `--cli` omitted off a TTY install/uninstall target every
-detected agent CLI.
+Enforcement on one machine needs no account at all: hooks in 12 harnesses, plus whatever
+policies you install. **Policies are not in the npm package.** They arrive as packs, and a
+machine that has just finished setup enforces nothing but the always-on guard until one lands.
 
-Route: authoring a policy from a complaint or an audit finding is `failproofai-policy-author`.
-Getting one onto machines, proving it fired, and recovering a bad deploy is
-`failproofai-policy-deploy`. Flags and JSON shapes are `references/commands.md`.
+```bash
+failproofai policies show FailproofAI/policies    # look first — manifest only, no code fetched
+failproofai policies add FailproofAI/policies     # ours: 38 policies, 10 on by default
+failproofai policies add acme/deploy-guard        # anyone's, the same way
+failproofai policies                              # what is on this machine
+```
+
+**A slash is the whole routing rule.** `policies add block-sudo` turns one policy on;
+`policies add acme/deploy-guard` installs a pack. `policy`, `pack` and `p` are all spellings of
+`policies`, so nothing anyone typed before breaks — but write `policies`.
+
+**Two acts wear the verb "publish", and neither changes what a machine does.** `failproofai
+publish` builds the three assets and cuts a GitHub release — that is how anyone else installs
+what you wrote. `fp policies publish` mints an immutable cloud version. Something still has to
+take it: `fp fleet deploy`, or a person running `failproofai policies add`.
+
+Traps with real blast radius: `policies --uninstall --scope all` has no confirmation prompt;
+with `--cli` omitted off a TTY, install and uninstall target every detected agent CLI; and
+`policies remove` reads the pack id immediately after `remove`, so never put a flag in between.
+
+Route: authoring a policy from a complaint or an audit finding, and **anything about the
+backtest** — reading a verdict, why a draft came back `observe-only`, whether to trust a green
+result — is `failproofai-policy-author`. Publishing a pack, getting a policy onto machines,
+proving it fired, and recovering a bad deploy is `failproofai-policy-deploy`. Flags and JSON
+shapes are `references/commands.md`.
 
 ---
 

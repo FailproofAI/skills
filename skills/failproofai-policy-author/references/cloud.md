@@ -261,7 +261,104 @@ fp --json list tools      # also: agents, envs, event_types, hooks, error_types
 ```
 
 A policy matching a tool name no tool ever emits is dead on arrival, and this is the cheapest
-way to catch that before shipping it.
+way to catch that before shipping it. The next-cheapest is to replay the finished draft against
+the same fleet's traffic before anyone deploys it — *Backtest the draft before it ships*.
+
+## Backtest the draft before it ships
+
+A local test proves the policy decides correctly for the input you typed. The **backtest**
+replays it against the org's stored fleet traffic and reports how often it fires and how much
+of that lands on calls that actually failed. SKILL.md's *Backtest it against real fleet
+traffic* carries the decision rule — enforceability is judged before precision, and the verdict
+vocabulary. This is the operating procedure.
+
+**There is no CLI surface for it.** `fp policies` is `list show publish enable disable delete
+test compose` and nothing else; there is no `fp policies backtest` and no `fp policies author`.
+Say that plainly rather than implying a flag exists. Both live in the dashboard:
+
+| Route | What it is |
+|---|---|
+| `https://app.befailproof.ai/<org>/policy-editor` | where both backtests run. `/<org>/policies` redirects here, query preserved |
+| `https://app.befailproof.ai/<org>/policy-editor?from_issue=<issue-id>` | the hand-off link: drafts, replays and redrafts a policy for that issue |
+| `https://app.befailproof.ai/<org>/policy` | what *deployed* policies did — block rate, per-policy table. `/<org>/guardrails` redirects here |
+
+Keep the `<org>` segment on every link you print. An org-less `/policy` falls through the
+legacy resolver and can land a multi-org user in the wrong tenant.
+
+**Permissions: `policies:write` AND `events:read`, both.** `policies:write` alone gets 403 —
+the route checks the pair explicitly. The reason is worth understanding before you ask an admin
+to widen someone's role: a replay runs caller-supplied code over stored event payloads and
+returns whatever the policy gave as its reason, so `instruct(JSON.stringify(ctx.toolInput))`
+reads event payloads back out. It is an events read, whatever it looks like. Eligibility alone
+(*can a policy address this at all*) needs only `policies:write`. Check `whoami` first —
+a read-only account has neither.
+
+`fp policies compose "<description>"` is the **un-backtested** path: one model call, never
+replayed, no fired/precision/enforceable numbers behind what it prints. Useful as a starting
+draft, worthless as evidence. It is session-only and exits 2 under an API key.
+
+### Read the coverage line before the fire count
+
+Zero fires has four causes and only one of them is good news: the policy allowed everything
+correctly; it matched nothing; **it never loaded** (`registered: []`, failure kind
+`not_loaded` — "the source registered no policies, check it calls `customPolicies.add(...)`");
+or the window held no replayable traffic (`empty_corpus`). A failure is never reported as a
+clean run that produced no fires — the failure kinds are `not_loaded`, `threw`, `timed_out`,
+`sandbox_unavailable`, `empty_corpus`. Read that field first.
+
+Then check what the run actually measured, because several fields quietly shrink it:
+
+| Field | What it means for the numbers |
+|---|---|
+| `truncated` | the window held more than the read cap — you got a recent slice, not the window you asked for |
+| `available` > `reconstructed` | same thing, stated as two numbers; every outcome figure is over `reconstructed` |
+| `payloadCapped` | paging stopped on the retained-payload budget, not the row cap. The events were **large**, so widening the window makes this worse, not better |
+| `omittedForSize` / `dropped` | individual cases dropped on a size bound; `droppedReasons` says which |
+| `evalErrors > 0` | the policy threw on that many calls. A throw fails open (`references/traps.md` §3), so it enforced nothing on those — and the fire count cannot show you which |
+
+**Scope to one agent or the numbers are blended.** The stored events do not record which
+integration produced them, so the replay resolves it from the agent id prefix
+(`<integration>-<purpose>`) and reports `cliResolvedFrom`: `request` (you named it),
+`agent-prefix` (inferred), or `default` — and `default` means nothing was identifiable and the
+Claude tool map was assumed. Treat a `default` result as unscoped. `cliHasToolMap: false` means
+tool names pass through uncanonicalized, so only a policy matching raw names can fire there.
+
+**429 means wait, not broken.** Replay slots are capped instance-wide and shared with the
+authoring loop; a saturated pod answers 429 with a `Retry-After` and the UI says "waiting for a
+slot…". Two people backtesting at once is enough to hit it. Do not report it as a failure.
+
+### The issue → policy loop, and where it stops
+
+`?from_issue=<id>` runs the whole thing: eligibility check, a tool-vocabulary probe, then up to
+three compose→backtest rounds, streamed phase by phase (~20–30s end to end). Two limits decide
+how much of the output to trust:
+
+- **The eligibility check rejects on framing.** When a finding's headline describes a
+  cross-call effect — "retried 14 times", "burned the run budget" — it refuses a policy-shaped
+  finding roughly half the time, in one measured case even after the finding named the
+  enforceable `PreToolUse` remedy itself. If you believe a policy applies, restate the finding
+  with the enforceable action in the **title** and re-run; that alone flips it. An ineligible
+  verdict on a badly-framed issue is not a finding about the issue.
+- **The redraft rounds do not widen coverage.** Given a precise-but-narrow draft and the calls
+  it missed, the next round comes back *less* precise, not more — it rewrites the matcher
+  wholesale instead of extending it. The loop keeps the best round, so it is not harmful; it is
+  just not progress. Take the best draft and finish the coverage by hand.
+
+### What the verdict cannot tell you
+
+Three gaps, all declared, all of which change what you write in the report:
+
+- **Builtins are invisible to it.** The composer never considers them and the replay loads none,
+  so a draft duplicating an existing builtin scores exactly like an original and then never
+  fires, because the builtin already decided. The builtin check in SKILL.md's *Check the
+  builtins first* runs **before** any backtest — a green verdict is not evidence the policy is
+  needed, only that it aims correctly.
+- **It measures aim, not outcome.** The recorded agent cannot react: a deny in the replay
+  stopped nothing, and everything after it in that session still happened. Write "would have
+  fired on 50 real failures", never "would have prevented 50 failures".
+- **It is not a substitute for observing in production.** Deploying with `effect: observe`
+  answers what the rule does to calls being made *now*. Use both: replay first because it is
+  free, observe second because it is true. The deploy half is `failproofai-policy-deploy`.
 
 ## Closing the loop
 
@@ -292,6 +389,10 @@ mirrors onto the other.
 Same honest split as everywhere else, plus one FailproofAI Cloud-specific line:
 
 - **enforced now** — new policies + builtins enabled, with the finding each came from
+- **backtested** — for anything replayed: the verdict, `fired` / on real failures /
+  fires-that-can-block, and the window it ran over. A draft that came back `observe-only` is
+  reported as detection, not enforcement, whatever its precision said. Say "would have fired
+  on", never "would have prevented"
 - **already covered** — findings a builtin already handles
 - **broken enforcement** — hooks failing (source 2). Call these out first; they are live gaps.
   Give the **fleet-wide aggregate** (`failed / total = N%`) alongside per-hook counts — raw

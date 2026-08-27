@@ -220,7 +220,7 @@ then `refreshDaemonToCliVersion()` unless `--no-daemon`; then `writeVersionFile(
 | sudo is primed only on a TTY | On CI it falls through to `sudo -n`, fails, and prints the exact commands |
 | `update` does **not** prune old binaries | Only the wizard calls `pruneOldDaemonBinaries`; `bin/` accumulates one file per version |
 | `daemonVersionSkew()` is a file check | Null when `FAILPROOFAI_DAEMON_BINARY` is set or the recorded binary is gone. It never queries the running process |
-| `update --help` and `migrate --help` **error out** | `Unexpected argument: update` — neither name is in `SUBCOMMANDS`, so the top-level help guard fires before they are ever dispatched and their help blocks are unreachable. The commands themselves work |
+| `update --help` and `migrate --help` **work** | Both names are in `SUBCOMMANDS`, so each reaches its own help screen rather than erroring on the leftover positional |
 
 ### `migrate --dry-run`
 

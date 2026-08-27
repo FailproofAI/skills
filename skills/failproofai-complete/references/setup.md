@@ -43,15 +43,20 @@ about whether the local half is set up. Check each with its own command.
 
 ## Decide the end state before you install anything
 
-The fork decides whether you need sudo and whether you need an account at all.
+The fork decides whether you need an account. It does **not** decide sudo: setup installs
+`failproofaid` in both modes, and that needs root once.
 
 | End state | What you get | What it costs |
 |---|---|---|
-| **Local only** | builtin + custom + convention policies, hooks across 12 harnesses, offline audit of local history, the local dashboard on port 8020 | no fleet, no cloud sessions, no evals, no issues or alerts, no publish → deploy lifecycle |
-| **Cloud connected** | all of the above, plus centrally-managed policy, session capture, the fleet view, and the deploy/rollback lifecycle | an account, a scoped key, and the daemon — which needs sudo |
+| **Local only** | hooks across 12 harnesses, any pack you install, plus custom and convention policies, offline audit of local history, the local dashboard on port 8020 | no fleet, no cloud sessions, no evals, no issues or alerts, no publish → deploy lifecycle |
+| **Cloud connected** | all of the above, plus centrally-managed policy, session capture, the fleet view, and the deploy/rollback lifecycle | an account and a scoped key — and decisions and full transcripts leave the machine |
 
 Local only is **complete and supported**. Do not treat `cloud  not connected` as a broken
 install; the wizard's own copy for that state is "nothing leaves this machine".
+
+Neither end state comes with policies. Setup wires the hooks and deliberately chooses nothing
+for them to enforce — see *Step 7*, which is the step people skip and then report as a broken
+install.
 
 ## Step 1 — install the local CLI
 
@@ -65,8 +70,9 @@ The npm package ships two binaries. `failproofaid` is a launcher shim; the daemo
 launches is a compiled service, Linux and macOS only. On Windows every cloud noun stays
 unreachable even after a successful connect.
 
-`npm install -g` installs **no service and no daemon binary** into `~/.failproofai`. It
-gives you the CLI and nothing else. Installing the package is not setting the machine up.
+`npm install -g` installs **no service, no daemon binary and no policies**. It gives you the
+CLI, one compiled always-on guard, and nothing else. Installing the package is not setting the
+machine up, and setting the machine up is not choosing what it enforces.
 
 ## Step 2 — install the cloud CLI
 
@@ -205,10 +211,33 @@ failproofai config --connect https://app.befailproof.ai --token "<key>"
 pull, no transcript capture and no delivery — the machine looks configured and ships
 nothing.
 
-The wizard is six steps and needs a TTY. Step 0 is the daemon install: it runs *first*,
-takes sudo, and aborts before touching any hook config, so a failure leaves the machine
-untouched. Off a TTY the wizard prints three lines and **exits 0 having done nothing** — a
-provisioning script that checks the exit code sees success. Never gate on it.
+The wizard is one linear flow, and it is shorter than it used to be. It installs the daemon,
+wires hooks into **all twelve supported agent CLIs at global scope**, offers to connect, and
+applies. It does not ask about scope, it does not ask which agents you use, and **it does not
+ask about policies** — there is no policy step, no themed bundles, and no recommended set.
+
+| Stage | What happens | Are you asked |
+|---|---|---|
+| daemon | `failproofaid`, installed **first** because it is the only step needing a password. `sudo -v` primes on a clean terminal, before any frame is drawn | no — required, and setup refuses outright on any platform `failproofaid` does not run on |
+| scope | global, always | no |
+| harnesses | all twelve, detected or not. An agent installed next week is guarded from its first tool call | no |
+| policies | **nothing.** Whatever was already enabled at that scope is read and carried through untouched | no — there is no policy step |
+| connect | paste a scoped key, or stay fully local | yes |
+| review | shows exactly which files change, then applies | yes, unless off a TTY or `--token` already answered the run |
+
+Three consequences worth stating before you run it:
+
+- **A finished setup enforces almost nothing.** The only policy running is the compiled
+  always-on guard. The wizard says so itself on the way out — "Nothing is enforcing yet" —
+  and points at `failproofai policies add`. That is the intended end state, not a bug.
+- **Re-running it never reduces protection.** Hooks are written with `replace: true` against a
+  set that was read off disk first, so a second run cannot switch off a policy you turned on.
+  Convention policies are left alone in both modes.
+- **Off a TTY it just runs.** There is nothing to confirm when nobody is watching, so it
+  applies rather than asking — no flag needed. It exits **1** if anything it was asked to do
+  did not happen, including a key the server refused and a machine that could not reach root;
+  sudo is never prompted for on that path, it either works without a password or you are told
+  the exact commands to run.
 
 Flags on `--connect`:
 
@@ -238,44 +267,80 @@ Four traps on this one command:
 Each capability is probed before anything is written, and only what verified is written, so
 a partial success is normal and is reported per half.
 
-## Step 7 — install hooks
+## Step 7 — choose what enforces
 
-Hooks are what make a policy fire. They are per-harness and per-scope, and they are written
-by a different command from everything above.
+Step 6 wired the hooks. It chose nothing for them to fire on, and hooks alone enforce nothing.
+**Policies are not in the npm package**: they arrive as *packs* — published GitHub releases,
+verified by digest, installed by whoever wants them.
 
 ```bash
-failproofai policies --install block-rm-rf block-force-push --cli claude --scope user
-failproofai policies                          # what is enabled, and in which scope
+failproofai policies show FailproofAI/policies   # look first: manifest only, no code fetched
+failproofai policies add FailproofAI/policies    # ours — 38 policies, 10 on by default
+failproofai policies                             # what is on this machine now
 ```
 
+`FailproofAI/policies` is typed in full because it is a pack like anyone else's. `core`,
+`failproofai` and `official` are retired spellings that exit 1 naming the replacement, and
+there is **no offline install of anything** — taking a pack needs the network, though a pack
+already installed keeps enforcing without it.
+
+| Command | What it does |
+|---|---|
+| `failproofai policies` | everything on this machine, and whether it is actually enforcing |
+| `failproofai policies add` | pick from what is installed. One screen, space toggles. **Needs a terminal** — from a pipe it exits 1 |
+| `failproofai policies add block-sudo` | turn one policy on — no slash |
+| `failproofai policies add acme/deploy-guard` | install a pack — **a slash means a source** |
+| `failproofai policies show acme/deploy-guard` | what a pack holds, before you take it |
+| `failproofai policies remove <name>` \| `remove <pack-id>` | one policy, or a whole pack |
+| `failproofai publish ./my-policies.mjs` | build, release and upload a pack of your own |
+
+`policy`, `pack` and `p` are all spellings of `policies`, so nothing anyone typed before
+breaks. Write `policies`.
+
 Supported harnesses: `claude`, `codex`, `copilot`, `cursor`, `opencode`, `pi`, `hermes`,
-`openclaw`, `factory` (binary `droid`), `devin`, `antigravity` (binary `agy`), `goose`.
-Find which are present before you choose:
+`openclaw`, `factory` (binary `droid`), `devin`, `antigravity` (binary `agy`), `goose`. Setup
+wires all twelve whether or not they are installed, so this is for picking one to *test* in:
 
 ```bash
 command -v claude codex copilot cursor-agent opencode pi hermes openclaw droid devin agy goose
 ```
 
-Four things to get right:
+Six things to get right:
 
-- **Name the policies explicitly.** A bare `--install` with no names is an arrow-key picker
-  on a TTY — which will block an agent forever — and off a TTY it silently narrows to the
-  11 default-enabled builtins out of 39.
+- **The slash is the only disambiguator, and it is total.** A policy name matches
+  `/^[A-Za-z0-9._-]+$/` and can never contain one. Everything holding a slash is a pack
+  source: `acme/guard`, `acme/guard@v2`, `acme/guard@a1b2c3d` (the release built from that
+  commit), `github:acme/guard@v2`, or a release URL. A tagless source is resolved to a
+  concrete tag *before* anything is written, and that tag is what gets recorded.
+- **Selection flags merge; the picker replaces.** `policies add acme/guard --category Git` on
+  an already-installed pack means *also* turn Git on — the command's first word is `add`. The
+  interactive picker's list is the complete answer, which is what makes unticking able to turn
+  something off at all.
+- **Put the pack id immediately after `remove`.** That lane reads the first positional and
+  nothing else, so `policies remove --scope user acme/guard` takes `--scope` as the id. Write
+  `failproofai policies remove acme/guard`.
+- **`policies --install` with no names is not a policy picker any more.** It wires hooks and
+  touches no policy at all. With names it turns those on — and on a machine with no pack yet
+  it *fetches* `FailproofAI/policies` to get them, so that one path needs the network and
+  warns rather than throwing when it cannot reach it.
 - **Scope changes the shape of what is written, not just its location.** `--scope project`
   writes a committable `npx -y failproofai` command with no machine-specific paths;
   `user` and `local` write an absolute binary path. `hermes` and `openclaw` are
   user-scope only — they have no project config. `--scope local` is `claude` only.
   Installing at two scopes causes duplicate policy evaluation; the CLI warns and does not
-  prevent it.
-- **Installs are additive.** Repeated `--install` unions with what is already enabled.
-  There is no "exactly these and nothing else"; use `--uninstall` to subtract.
+  prevent it. Scope applies to hooks and to the policy-name lane; a **pack** install is
+  machine-level, recorded in `~/.failproofai/policies/packs/installed.json`, and `--scope`
+  does nothing to it.
 - **Convention policies load by filename.** Any file matching `policies.{js,mjs,ts}` in
   `.failproofai/policies/` (project) or `~/.failproofai/policies/` (user) auto-loads with
   no flag. `block-force-push.mjs` does **not** match, is skipped silently, and enforces
   nothing while looking installed. Name it `block-force-push-policies.mjs`.
 
-One builtin, `block-failproofai-commands`, is always on and cannot be disabled. That is
-deliberate: it is what stops an agent turning off its own guardrails.
+One policy, `block-failproofai-commands`, is compiled into the package, always on, and cannot
+be disabled — not by a session pause, not by an unparseable config, not by an empty machine.
+That is deliberate: it is what stops an agent turning off its own guardrails, and it is why a
+*pack* may not declare `alwaysOn` and this one guard cannot travel the pack lane. Until you
+finish this step it is the only thing enforcing.
 
 ## Step 8 — prove a session actually lands
 
@@ -301,6 +366,12 @@ you enabled will actually see — a `Bash` call, not a thought.
 Policies → Activity log. A decision row for that tool call is the proof that hooks are
 wired and the policy engine ran. This works with no account and no network. If you are
 local-only, you are done here.
+
+Cross-check it with `failproofai policies`. Its subtitle answers a different question than the
+activity log does: `<scopes> · <N> on` is healthy, `<N> on · NOT ENFORCING` means packs are
+installed but no agent CLI is wired, and `nothing installed` means step 7 has not happened. On
+a machine with no pack the only decisions you will ever see are the always-on guard's — the
+hooks are fine, there is just nothing for them to enforce.
 
 **4. Cloud proof.** Delivery is unhurried by design — the sweeper takes batches older than
 120 s, at most 64 per pass, on a 60 s cadence. Give it a minute, then:
@@ -348,7 +419,10 @@ fp policies test ./rule.mjs --command "git push --force origin main"
 | Machine appears twice | `--machine-id` history | an ingest-only connect stamped one id, a later policy-capable connect minted another |
 | **Every tool call denied, on every CLI** | `config --status` daemon row | daemon unreachable or version-skewed. Enforcement is **failing closed**, deliberately — including `UserPromptSubmit`, so the user cannot even ask their agent why. Run `failproofai update` or restart the unit |
 | Custom policy does nothing | the filename | it must end `policies.{js,mjs,ts}` |
-| Hooks installed, nothing enforces | `failproofai policies` | installed at the wrong scope, or for a harness the user does not actually run |
+| Setup finished and nothing is enforcing | `failproofai policies` | **no pack installed.** That is the state setup leaves behind, deliberately. `failproofai policies add FailproofAI/policies` |
+| `policies add core` exits 1 | — | `core`, `failproofai` and `official` are retired. Type the pack in full: `FailproofAI/policies` |
+| Header says `NOT ENFORCING` | `failproofai config` | packs are installed but no agent CLI is wired |
+| Hooks installed, a pack is on, still nothing enforces | `failproofai policies` | installed at the wrong scope, or for a harness the user does not actually run |
 
 ## Upgrading, later
 

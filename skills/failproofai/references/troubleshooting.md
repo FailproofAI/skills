@@ -225,10 +225,9 @@ failproofai update            # migrations + matching daemon binary + restart
 failproofai config --status
 ```
 
-`update` and `migrate` both work, but `update --help` and `migrate --help` **error with
-`Unexpected argument: update`**: neither name is in the `SUBCOMMANDS` array the top-level
-help guard checks (`bin/failproofai.mjs`, grep `SUBCOMMANDS`), so the guard claims the
-invocation and throws on the leftover positional. `update` also never prunes old daemon
+`update` and `migrate` both work, and so do `update --help` and `migrate --help` — both names
+are in the `SUBCOMMANDS` array the top-level help guard checks (`bin/failproofai.mjs`, grep
+`SUBCOMMANDS`), so each reaches its own help screen. `update` never prunes old daemon
 binaries — only the wizard does — so `~/.failproofai/bin/` accumulates one file per version.
 
 ## The unit latched "start request repeated too quickly"
@@ -467,7 +466,7 @@ Local `failproofai` unless the row names `fp`.
 | `flush` | `Nothing spooled` | `state/failed/` is not counted |
 | `failproofai audit` | exit 75 | `EX_TEMPFAIL` — another audit holds the lock; not a failure |
 | `harness add-path` | `configured` | the daemon may refuse the path at startup |
-| `pack list` | exit 1, output on stderr | one installed pack merely failed to load |
+| `failproofai policies` | exit 0, a normal listing | a pack that will not load is a warning row, not a failure — read the rows, not the exit code |
 | `fp whoami` | exit 0 | exits 0 **either way** — read `.logged_in`, never the exit code |
 | `fp policies publish` | a new version | deploys nothing; the machines keep running the old one |
 | any subcommand | stdout | on a non-zero exit **every** line goes to stderr instead |
@@ -478,13 +477,14 @@ top-level guard sits after it and never runs. So `--no-transcript`, `--notranscr
 whatever was pasted into a terminal) ship to the cloud. Confirm the setting with
 `config --status`, never with the exit code.
 
-- **No `--flag=value` anywhere in `failproofai`** except exactly four flags: `--cli=`,
-  `--out=`, `--effect=` and `audit --email=`. Every other parser is hand-rolled around
-  whole-token comparison, so `--since=6m`, `--scope=user`, `--only=git`, `--category=git`
-  all fail with "Unexpected argument". `--only` and `--category` sit beside `--cli` in the
-  same `pack add` line and still do **not** take the equals form. This rule is **local
-  only** — `fp` parses `--timeout=5` and every other valued option in the equals form
-  happily, so do not carry the habit either way between the two binaries.
+- **`--flag=value` works in `failproofai` only on the pack/publish lane and `--cli`**:
+  `--cli=`, `--out=`, `--effect=`, `audit --email=`, and `--policy=` / `--only=` /
+  `--category=` on `policies add`. Every other parser is hand-rolled around whole-token
+  comparison, so `--since=6m` and `--scope=user` fail with "Unexpected argument" —
+  `--scope` sits beside `--cli` in the same `policies add` line and still does **not** take
+  the equals form. This rule is **local only** — `fp` parses `--timeout=5` and every other
+  valued option in the equals form happily, so do not carry the habit either way between the
+  two binaries.
 - `--cli` consumes values greedily and stops at the first token that is not a recognised CLI
   name, so `--cli bogus` reports *"Missing value(s) for --cli"* — while
   `--cli claude block-sudo` correctly reads `block-sudo` as a policy, so a **typo'd CLI name

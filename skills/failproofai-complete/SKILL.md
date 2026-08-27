@@ -210,10 +210,11 @@ Eleven subcommands, a hook entrypoint, and a bare invocation that launches a das
 
 | Command | Purpose |
 |---|---|
-| `config` (aliases `configure`, `setup`) | The six-step wizard. `--connect --token`, `--status`, `--pause`, `--resume`, `--disconnect`, `--machine-id`, `--machine-label`, `--no-transcripts`. **The only thing that installs the daemon** |
-| `policies` (alias `p`) | List, `--install`, `--uninstall` hooks and policies across the 12 harnesses, per `--scope` and `--cli` |
-| `policy add\|remove <name>` | Flip exactly one policy. Takes only `--scope`, `--cli`, `--beta` |
-| `pack` | `pack list`, `pack add <owner/repo[@tag]>`, `pack remove <publisher/name>` — published policy packs, verified against the release `SHA256SUMS` |
+| `config` (aliases `configure`, `setup`) | One linear wizard: daemon, connect, review. `--connect --token`, `--status`, `--pause`, `--resume`, `--disconnect`, `--machine-id`, `--machine-label`, `--no-transcripts`. **The only thing that installs the daemon**, and it **chooses no policies** |
+| `policies` (aliases `policy`, `pack`, `p`) | List what is on this machine; `--install`, `--uninstall` hooks and policies across the 12 harnesses, per `--scope` and `--cli` |
+| `policies add\|remove <what>` | A **slash** decides: `block-sudo` is one policy (takes `--scope`, `--cli`, `--beta`), `acme/deploy-guard` is a whole pack, installed by digest and verified against the release `SHA256SUMS` |
+| `policies show <owner>/<repo>` | Preview a pack before installing — manifest only, so no stranger's code is fetched. `--releases` lists what has been cut |
+| `publish` | Build the three release assets, cut the GitHub release, upload them. `--init` scaffolds a starter policy; with no `--repo` it builds locally and stops |
 | `harness` | `harness list`, `add-path`, `remove-path` — tell the collector where a harness's sessions live |
 | `audit` | Scan this machine's own agent history offline. Also `--status`, `--schedule [days]`, `--no-schedule`, `--email` |
 | `backfill` | Ask the daemon to re-read history it already holds a cursor for. `--since 30d\|6m\|YYYY-MM-DD`, `--dry-run` |
@@ -251,8 +252,12 @@ fleet view, and requires the daemon, which requires sudo.
 
 ```bash
 npm install -g failproofai        # Node >= 20.9, Linux or macOS
-failproofai config                # the interactive six-step wizard
+failproofai config                # the interactive wizard: daemon, connect, review
 ```
+
+The wizard **chooses no policies**. A finished setup enforces exactly one thing, the compiled
+always-on guard `block-failproofai-commands`; enforcement arrives when somebody installs a
+pack. That is the intended end state — see `references/setup.md`.
 
 **Only the interactive wizard installs the daemon.** `config --connect` deliberately avoids
 sudo and merely warns. Without a daemon there is no policy pull, no transcript capture and no
@@ -299,7 +304,7 @@ fp --json whoami                  # read .logged_in, not the exit code
 
 ```bash
 failproofai policies --install --cli claude --scope user
-failproofai policy add block-rm-rf
+failproofai policies add block-rm-rf
 ```
 
 Supported harnesses: `claude`, `codex`, `copilot`, `cursor`, `opencode`, `pi`, `hermes`,

@@ -984,9 +984,11 @@ is the map; `skills/failproofai/references/cli.md` is the authority on every edg
 | Command | Flags |
 |---|---|
 | `config` (aliases `configure`, `setup`) | `--connect <url> --token <key>`, `--machine-id`, `--machine-label`, `--no-transcripts`, `--disconnect`, `--status`, `--pause [<dur>] [--session <id>]`, `--resume [--all] [--session <id>]` |
-| `policies` (alias `p`) | `--install`/`-i`, `--uninstall`/`-u`, `--scope user\|project\|local[\|all]`, `--cli`, `--beta`, `--custom`/`-c` |
-| `policy add\|remove <name>` | `--scope`, `--cli`, `--beta` **only** — `--custom` is a hard error here |
-| `pack` | `pack list`, `pack add <owner/repo[@tag]> [--only a,b] [--category x,y] [--all]`, `pack remove <publisher/name>` |
+| `policies` (aliases `policy`, `pack`, `p`) | `--install`/`-i`, `--uninstall`/`-u`, `--scope user\|project\|local[\|all]`, `--cli`, `--beta`, `--custom`/`-c` |
+| `policies add\|remove <name>` | `--scope`, `--cli`, `--beta` **only** — `--custom` is a hard error here |
+| `policies add\|remove <owner>/<repo>` | The **pack** lane, chosen by the slash: `[--policy a,b\|--only a,b] [--category x,y] [--all] [--cli <agent>…]`. `--scope` is ignored — a pack install is machine-level |
+| `policies show <owner>/<repo>` | `--releases`. Manifest only; no code is fetched |
+| `publish [<entry.mjs>]` | `--repo <owner>/<repo>`, `--id`, `--version`, `--tag`, `--notes`, `--out <dir>`, `--effect enforce\|observe`, `--commit`, `--dry-run`, `--allow-private`, `--init [file]` |
 | `harness` | `harness list [<h>]`, `add-path <h> [<label>=]<path>`, `remove-path <h> <path\|label>`. No flags on any |
 | `audit` | `--schedule [days]`, `--no-schedule`, `--email <a>`, `--status`. Not composable — each rejects every other argument |
 | `backfill` | `--since <30d\|6m\|YYYY-MM-DD>`, `--dry-run` |
@@ -1013,15 +1015,16 @@ Traps that decide whether a command did what you think:
   CLI** with no prompt.
 - **`uninstall --yes` does more than skip a prompt** — it also removes the systemd service
   unconditionally. No TTY and no `--yes` is a refusal (exit 1), never an assumed yes.
-- **`update` and `migrate` are missing from the `SUBCOMMANDS` set and both still work.** Their
-  own `--help` is unreachable dead code: `failproofai update --help` errors with "Unexpected
-  argument: update", exit 1. Quote the top-level `failproofai --help` instead.
+- **`SUBCOMMANDS` is eleven entries** — `policies audit config uninstall backfill flush harness
+  publish update migrate help`. `update` and `migrate` are in it now, so `failproofai update
+  --help` reaches its own help screen. `policy` and `pack` are not in it and do not need to be:
+  both are rewritten to `policies` before the guard reads `args[0]`.
 - **`backfill` and `flush` fail loudly (exit 1) on an unconnected machine** rather than
   no-op'ing. `flush --wait` also exits 1 on timeout, which is not a real failure but will kill
   a `set -e` script. `flush` refuses outright on Windows.
 - **Non-zero means everything goes to stderr.** Every `{lines, exitCode}` subcommand routes
-  per line, and `pack list` exits 1 when any installed pack merely fails to load — so a normal
-  listing can land entirely on stderr.
+  per line. The bare `policies` listing is not one of them — a pack that will not load prints a
+  warning row and still exits 0, so read the rows rather than the exit code.
 
 ## Local exit codes
 

@@ -4,11 +4,11 @@ description: |-
   The way to turn what an agent keeps doing wrong into enforcement — failproofai policies that fire on every tool call. Reach for it on vague phrasing: "my agent keeps force-pushing" — a complaint, not a policy request.
 
   Trigger when the user wants to:
-  • act on an audit — turn `failproofai audit` findings into fixes, or ask which policies actually work;
+  • act on an audit — turn `failproofai audit` findings into fixes, or ask which policies work;
   • stop a recurring behaviour, in plain words or as "write a policy that blocks X";
   • enforce a rules file — make a CLAUDE.md / AGENTS.md real instead of advisory;
-  • enable an existing builtin — usually the right answer, checked before authoring;
-  • work from FailproofAI Cloud — findings, plus which hooks fail or over-deny.
+  • enable an existing builtin — usually the right answer, checked first;
+  • work from FailproofAI Cloud — findings, hooks that fail or over-deny, backtesting a draft.
 
   Served by the `failproofai` CLI.
 
@@ -458,6 +458,10 @@ read their `name`/`description` lines. Coverage is not only builtins: a hand-wri
 may already enforce exactly what you were about to author, and a duplicate means two
 policies firing on every matching event.
 
+This check runs **here**, and nothing downstream repeats it. The cloud composer does not
+consider builtins and the backtest replays with none loaded (*Backtest it against real fleet
+traffic*), so a duplicate scores just as well as an original and then never fires.
+
 ### Pick an event the harness can actually enforce
 
 Read `references/api.md` for `PolicyContext`, the decision helpers, and the full event list.
@@ -554,6 +558,9 @@ State its limits rather than letting a green line stand in for enforcement:
   Copilot, so it never proves that `terminal` or `powershell` reaches a policy matching `Bash`.
 - **no capability check.** It will report `deny` just as happily for an event the target
   harness discards. Nothing is marked INERT.
+- **no traffic.** One input at a time, and you chose it. How often the rule would fire
+  across a real fleet, and how much of that lands on calls that actually failed, is a
+  different question with a different tool (*Backtest it against real fleet traffic*).
 - **it cannot prove the daemon feeds the policy the same context.** It proves the file
   parses, registers and decides for the input you typed. That is the whole claim.
 
@@ -652,6 +659,100 @@ Two ways this test can lie to you:
 
 Use the `examples[]` from the audit finding as your should-deny cases — they are real
 commands the agent ran, so they prove the policy catches what actually happened.
+
+### Backtest it against real fleet traffic
+
+Both tests above prove the file decides correctly on inputs **you** chose. Neither can tell
+you what the rule does to a working day: how often it fires on traffic nobody curated, and
+how much of that firing lands on calls that genuinely failed. The **policy backtest**
+answers that — it replays a draft against the org's stored fleet events and scores it. Run
+it on anything you are about to publish to a fleet: a rule that is correct on two handwritten
+cases and fires 262 times across the window — 50 of them on anything real — is not shippable,
+and only the replay says so.
+
+**There is no CLI surface.** `fp policies` has eight subcommands — `list show publish enable
+disable delete test compose` — and none of them backtests. Do not send the user looking for
+one. It lives in the dashboard, at `https://app.befailproof.ai/<org>/policy-editor` (the
+older `/<org>/policies` path redirects there, query preserved): paste or compose the `.mjs`
+under *publish a version*, pick an agent, a window (24h / 7d / 30d, default 30d) and a sample
+(default: everything in the window), then **run backtest**. It needs **`policies:write` and
+`events:read` — both**. `policies:write` alone gets 403, because a replay runs caller-supplied
+code over stored payloads and hands back whatever the policy returned as its reason. Demo orgs
+are refused outright rather than shown a flattering number. `references/cloud.md` has the
+procedure, the failure modes, and how to read a result that is measuring less than you asked for.
+
+**Enforceability is judged before precision.** This is the part that changes what you write.
+On most integrations a post-call deny is discarded (*Pick an event the harness can actually
+enforce*), so a reactive catch can score **100% precision and ship completely inert** — it
+fires on exactly the right calls, at a hook that does nothing with the verdict. The judge
+therefore checks "did any of these fires land on a hook this integration can block?" **before**
+it looks at precision at all, and a draft catching every failure on an observe-only hook comes
+back `observe-only`, **not shippable**. The remedy is a `PreToolUse` preflight — predict the
+failure from `ctx.toolInput` before the call — **not a deeper reactive catch**; moving the same
+rule to `PostToolUseFailure` makes it more inert, not less, because that hook blocks on no
+integration at all.
+
+The numbers, and what each one is:
+
+| Number | Counts |
+|---|---|
+| `fired` | calls the policy acted on |
+| `matched` | calls its filter applied to, whatever it then decided — the denominator |
+| fired on real failures | fires that landed on a call that genuinely failed |
+| hit working calls | fires on calls that succeeded — the number an operator lives with |
+| **fires that can block** | of `fired`, how many landed on a (cli, event) pair verified to block |
+| precision | `100 × real / fired` |
+| fires per catch | `fired / real` — interruptions per prevented failure ("5.2× noise") |
+
+`fires that can block` at **0** with `fired > 0` means inert. Absent is not zero: an older
+result that never carried the field is *not verified*, and reading it as inert condemns every
+historical replay.
+
+Three runs on the project's own seeded corpus (7542 synthetic events), which is what the three
+outcomes look like in practice:
+
+| Draft | fired | on real failures | verdict |
+|---|---|---|---|
+| preventive rule on a mostly-succeeding tool | 262 | 50 — 19% precision, 5.2× noise | `drowns` |
+| post-call catch, correct but inert | 19 | 19 — 100% precision, **0 can block** | `observe-only` |
+| `PreToolUse` gate on a wholly-broken tool | 22 | 22 — 100% precision, enforceable | `shippable` |
+
+The verdict vocabulary is closed; these eleven are all of it:
+
+| Verdict | Means |
+|---|---|
+| `shippable` | fires predominantly on real failures, at a hook that blocks |
+| `narrow` | ≥80% precision but <60% recall — publishable, will not cover everything. Say so |
+| `drowns` | <80% precision — an operator disables it, and then you have nothing |
+| `observe-only` | fires on real failures at a hook this integration cannot block — inert |
+| `detects-only` | the model stood by an observe-only draft — deploy it as an alert, not a gate |
+| `no-catch` | fired, and hit no real failure |
+| `matched-no-fire` | watched the right calls, acted on none — usually the wrong event |
+| `never-fires` | matched nothing at all — usually the wrong tool name |
+| `unreplayable` | matches only `Stop` / `UserPromptSubmit`, which a tool-call replay never synthesises. The zero is not a verdict on the policy |
+| `failed` | the run itself broke — read the failure kind, do not read the zero |
+| `empty` | no replayable traffic in the window |
+
+**What a green verdict does not prove.** Three declared gaps, and they decide how much of the
+verdict to believe:
+
+- **It has never heard of the builtins.** The composer does not consider them and the replay
+  loads none, so a draft that simply duplicates an existing builtin can score `shippable` and
+  then never fire in production, because the builtin already decided. **Builtins-first
+  (*Check the builtins first*) runs before any backtest, not after it** — a replay cannot tell
+  you the rule was already enforced.
+- **It measures aim, not outcome.** The recorded agent never reacts: its behaviour is fixed in
+  the transcript, so a deny in the replay stopped nothing and everything after it in that
+  session still happened. 67% precision does not mean 67% of failures prevented. Say "would
+  have fired on", never "would have prevented".
+- **A policy that throws still looks like a policy that allowed.** Fail-open is the whole
+  system (`references/traps.md` §3) and the replay inherits it — a 2s timeout there is an allow
+  too. `evalErrors > 0` on the result is the only place it surfaces; read it before the fire count.
+
+The backtest and an `observe`-mode deployment are complements, not substitutes: the replay
+answers *what would this have done to calls already made* in seconds, blind to the agent
+reacting; shipping with `effect: observe` answers *what is it doing to calls being made now*,
+slowly and exactly. That second half belongs to `failproofai-policy-deploy`.
 
 ### Confirm the policy is actually live — then hand off
 
@@ -829,6 +930,17 @@ real shape is `ctx.toolName === "execute_code"`, reading `ctx.toolInput.code` �
 string**, with the project key inside it — scoped by `ctx.cli === "hermes"`.
 `references/patterns.md` carries the finished policy.
 
+The dashboard will attempt those four lookups for you: open the issue's hand-off link,
+`https://app.befailproof.ai/<org>/policy-editor?from_issue=<issue-id>`, and it drafts a policy,
+replays it, and redrafts up to twice — about 20–30s, streamed phase by phase. Two things to
+know before you trust it. It **first asks whether a policy can address the finding at all**,
+and that check rejects a policy-shaped finding roughly half the time when the headline
+describes a **cross-call effect** ("retried 14 times", "burned the run budget") — even once
+where the finding itself named the `PreToolUse` remedy. That is a framing failure, not a
+verdict: restate the finding with the enforceable action in the title and it becomes eligible.
+And the redraft rounds do not widen coverage — shown what it missed, a draft gets *less*
+precise, not more. Read the verdict, keep the best round, and finish the work by hand.
+
 Two things that bite while reading payloads:
 
 - **Events arrive duplicated.** The same `tool_use` appeared 2–4× per call on a live fleet
@@ -850,6 +962,11 @@ fleet only ~11% of the tool surface is builtin-reachable (*Measure builtin cover
 *legitimate* payload from the same session as the should-allow. That is the difference
 between "this regex looks right" and "this blocks what actually happened and permits what
 actually worked".
+
+**Then backtest it before it goes anywhere near a fleet** (*Backtest it against real fleet
+traffic*). You are already working from cloud data, so the corpus this needs exists — and a
+policy sourced from one issue is exactly the kind that fires far more widely than the issue
+suggested.
 
 ### Propose the close-out; do not run it
 

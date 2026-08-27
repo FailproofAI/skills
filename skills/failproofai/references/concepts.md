@@ -291,16 +291,17 @@ Policies not compiled into the build, published as a GitHub release: one entry a
 plus a manifest, verified against the release's `SHA256SUMS` at install and **re-verified
 before every import**, so a pack cannot change under the machine after you installed it.
 
-`failproofai pack add <source>` with no tag installs the newest release **and pins it**,
+`failproofai policies add <source>` with no tag installs the newest release **and pins it**,
 then names the tag it chose. By default you get the pack's own defaults — what its author
 marked safe to switch on unattended — not everything it contains; widen with
-`--category a,b`, `--only a,b`, or `--all`. Re-adding at a newer version keeps what you
-chose rather than switching the rest back on. `FAILPROOFAI_NO_DOWNLOAD=1` refuses to
-fetch while already-installed packs keep enforcing. **`--only` and `--category` do not
-accept the equals form** — space-separate the value, exactly as written above. The
-`--flag=value` form is accepted in exactly four places: `--cli=`, `--effect=`, `--out=`
-and `--email=`. Elsewhere the hand-rolled parsers compare whole tokens, so `--since=6m`
-is rejected as an unexpected argument carrying no value at all.
+`--category a,b`, `--policy a,b` (spelled `--only` too), or `--all`. Re-adding at a newer
+version keeps what you chose rather than switching the rest back on.
+`FAILPROOFAI_NO_DOWNLOAD=1` refuses to fetch while already-installed packs keep enforcing.
+
+`--policy`, `--only` and `--category` accept both `--flag value` and `--flag=value`, as do
+`--cli`, `--effect` and `--out`. Elsewhere in the local CLI the hand-rolled parsers compare
+whole tokens, so `--since=6m` and `--scope=user` are rejected as unexpected arguments
+carrying no value at all.
 
 ## Two halves, and two finished states
 

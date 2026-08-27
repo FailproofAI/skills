@@ -34,37 +34,32 @@ Nothing about this order is obvious and three steps can hijack the command you t
 
 | Step | Anchor | What it does |
 |---|---|---|
-| 1. Alias rewrite | grep `args[0] === "p"` | `p`→`policies`, `configure`/`setup`→`config`. **`args[0]` only** — `failproofai policies p` does not alias |
+| 1. Alias rewrite | grep `args[0] === "p"` | `p`/`policy`/`pack`→`policies`, `configure`/`setup`→`config`. `pack list` splits by argument into `policies` or `policies show`; `pack build`→`publish`. **`args[0]` only** — `failproofai policies p` does not alias |
 | 2. `--hook` fast path | grep `const hookIdx` | Exits before `runCli()` entirely. Own exit-code contract |
 | 3. `--help` / `--version` guard | grep `const SUBCOMMANDS` | Fires only when `args[0]` is NOT in `SUBCOMMANDS`, and rejects any leftover token |
 | 4. Layout gate | grep `checkLayoutForCli` | A stale home is **reset** (files deleted); a newer home is fatal, exit 1 |
 | 5. Install report | grep `maybeReportInstall` | Writes `state/last-version` |
 | 6. First-run wizard | grep `shouldOfferFirstRun` | On an unconfigured TTY machine, runs setup **before** your command |
-| 7. Subcommand dispatch | `if (args[0] === "flush")` … | In file order: flush, backfill, pack, harness, migrate, update, uninstall, policies, audit, policy, config |
+| 7. Subcommand dispatch | `if (args[0] === "flush")` … | In file order: flush, backfill, harness, migrate, update, uninstall, publish, `policies add\|remove\|show`, the `policies` listing, audit, config |
 | 8. Unknown flag / subcommand | grep `unknownSubcommand` | Levenshtein nearest match over `SUBCOMMANDS` |
 | 9. Bare dashboard | grep `launch("start")` | Parks the process |
 
-`SUBCOMMANDS` is exactly nine entries: `policies policy audit config uninstall backfill
-flush harness pack`. **`update` and `migrate` are missing from it and both still work** —
-they are dispatched at step 7, which returns long before step 8 is reached, and they are
-explicitly exempted from step 4. The only thing their absence breaks is steps 3 and 8:
+`SUBCOMMANDS` is exactly eleven entries: `policies audit config uninstall backfill flush
+harness publish update migrate help`. `policy` and `pack` are **not** among them and do not
+need to be — step 1 rewrites both to `policies` before this guard ever reads `args[0]`.
 
-```
-failproofai update --help     → Error: Unexpected argument: update   (exit 1)
-failproofai migrate -h        → Error: Unexpected argument: migrate  (exit 1)
-failproofai update --version  → same
-failproofai updat             → "Did you mean: failproofai audit?"
-```
+`update` and `migrate` are now in the set, so `failproofai update --help` and `failproofai
+migrate --help` reach their own help screens instead of erroring on the leftover positional.
+So does `failproofai help update`. Quote them freely.
 
-Both commands ship full, carefully written help text that is **unreachable dead code**.
-Never tell a user to run `failproofai update --help`; quote the top-level `failproofai
---help` instead.
+A typo still lands on step 8: `failproofai updat` → nearest match over `SUBCOMMANDS`, exit 1.
 
 **First-run exemptions** (grep `FIRST_RUN_EXEMPT_SUBCOMMANDS`) are `config`, `policies`,
-`policy`, `uninstall`, `backfill`, plus `--help`/`-h`/`--version`/`-v`/`--hook`. Not exempt:
-`flush`, `harness`, `pack`, `audit`, `migrate`, `update` — so on an unconfigured TTY machine
-the wizard opens in front of `update`, which is the command you reach for when the install
-is already broken.
+`policy`, `uninstall`, `backfill`, plus `--help`/`-h`/`--version`/`-v`/`--hook`. The gate runs
+at step 6, *after* the step-1 rewrite, so `pack` and `p` are exempt too — they are already
+spelled `policies` by the time it looks. Not exempt: `flush`, `harness`, `audit`, `publish`,
+`migrate`, `update` — so on an unconfigured TTY machine the wizard opens in front of `update`,
+which is the command you reach for when the install is already broken.
 
 ## Where the shipped help text is wrong
 
@@ -87,19 +82,21 @@ Also dead: `connectionStatusLines()` is exported and referenced only by its own 
 Everywhere in `failproofai`, that is. None of this transfers to `fp`, which is a
 conventional option parser and takes `--timeout=5` and the like without complaint.
 
-- **No `--flag=value`.** Every guard compares whole tokens against a `Set`, so `--since=6m`,
-  `--timeout=30`, `--scope=user`, `--only=git`, `--category=git` all trip "Unexpected
-  argument". Exactly **four** flags take the equals form and nothing else does:
+- **No `--flag=value`, with a short list of exceptions.** Every guard in `bin/failproofai.mjs`
+  compares whole tokens against a `Set`, so `--since=6m`, `--timeout=30` and `--scope=user`
+  all trip "Unexpected argument". The exceptions all live in the pack/publish lane or in
+  `--cli`, and are these:
 
   | Flag | Where | Anchor |
   |---|---|---|
   | `--cli=` | everywhere `--cli` is accepted | grep `parseCliList`, `startsWith("--cli=")` |
-  | `--out=` | the pack build/publish path | grep `outFlagFrom` |
-  | `--effect=` | the pack build/publish path | grep `effectFlagFrom` |
+  | `--out=` | `publish` | grep `outFlagFrom` |
+  | `--effect=` | `publish` | grep `effectFlagFrom` |
   | `--email=` | `audit --schedule` | grep `--email=` in `audit/cli.ts` |
+  | `--policy=` / `--only=` / `--category=` | the pack lane of `policies add` | grep `parseList` in `pack-cli.ts` |
 
-  `--only` and `--category` are **not** among them, despite sitting beside `--cli` in the
-  same `pack add` invocation and reading like a set with it. Write them as two tokens.
+  `--scope` is **not** among them, despite sitting beside `--cli` in the same `policies add`
+  invocation and reading like a set with it. Write it as two tokens.
 - **Unknown-flag validation is per-branch, and `config` has none.** `failproofai config
   --statuss` does not error — it falls through every check and **launches the interactive
   wizard**. Same for a mistyped `--no-transcript`, `--disconect`, or any typo at all.
@@ -108,9 +105,9 @@ conventional option parser and takes `--timeout=5` and the like without complain
   block-sudo` correctly reads `block-sudo` as a policy — which means a typo'd CLI name is
   silently reinterpreted as a policy name.
 - **Non-zero means everything goes to stderr.** Every `{lines, exitCode}` subcommand does
-  `exitCode === 0 ? console.log : console.error` per line (flush, backfill, pack, harness,
-  uninstall). `pack list` exits 1 when any installed pack merely fails to load, so a normal
-  listing can land entirely on stderr.
+  `exitCode === 0 ? console.log : console.error` per line (flush, backfill, harness, publish,
+  uninstall). The bare `policies` listing is **not** one of them: a pack that will not load is
+  a warning row (`pack <id> will not load: <reason>`), not a non-zero exit.
 - **Twelve CLI names, everywhere the same set**: `claude codex copilot cursor opencode pi
   hermes openclaw factory devin antigravity goose` (grep `VALID_CLIS`, `HARNESS_KEYS`).
 
@@ -137,7 +134,9 @@ path.
 
 ## `config` (aliases `configure`, `setup`)
 
-Bare `failproofai config` is the six-step wizard. It needs a TTY, refuses on any non-Linux/
+Bare `failproofai config` is one linear wizard — daemon, connect, review — and it asks about
+**neither policies nor harnesses**: hooks go into all twelve agent CLIs at global scope and
+nothing is enabled on your behalf (`references/setup.md`). It needs a TTY, refuses on any non-Linux/
 macOS platform (grep `unsupported_platform`), and is the **only** thing that installs the
 daemon — `update` refreshes an existing service and returns early otherwise (grep
 `refreshDaemonToCliVersion`). Exit 1 when not applied and the abort is anything other than
@@ -186,17 +185,28 @@ install/uninstall target **every detected agent CLI** with no prompt — grep `a
 in `install-prompt.ts`; with none detected it defaults to `claude` with a warning that names
 only 6 of the 12 harnesses.
 
-## `pack`
+## Packs — `policies add|remove|show`, and `publish`
 
-`pack`, `pack list`, `pack add <source> [--only a,b] [--category x,y] [--all]`, `pack remove
-<publisher/name>`. Bare `pack` lists. Sources: `owner/repo`, `owner/repo@tag`,
-`github:owner/repo@tag`, or a full releases/tag URL. No tag installs the newest release
-**and pins it**. Default selection is the pack's own defaults, not everything. Artifacts are
-verified against the release `SHA256SUMS` at install and re-verified before every import.
-`FAILPROOFAI_NO_DOWNLOAD=1` refuses to fetch while installed packs keep enforcing.
+Packs have no command of their own. A **slash** routes them: a policy name matches
+`/^[A-Za-z0-9._-]+$/`, so `policies add block-sudo` turns one policy on and `policies add
+acme/deploy-guard` installs a pack.
 
-This whole family is absent from `docs/reference/failproof-cli.mdx` — source and `--help`
-are the only documentation.
+`policies` (bare) lists what is installed. `policies add <source> [--policy a,b] [--category
+x,y] [--all]`, `policies remove <publisher/name>`, `policies show <source> [--releases]` for a
+remote preview that reads the manifest only. Sources: `owner/repo`, `owner/repo@tag`,
+`owner/repo@<commit-sha>`, `github:owner/repo@tag`, or a full releases/tag URL. No tag installs
+the newest release **and pins it**. Default selection is the pack's own defaults, not
+everything. Artifacts are verified against the release `SHA256SUMS` at install and re-verified
+before every import. `FAILPROOFAI_NO_DOWNLOAD=1` refuses to fetch while installed packs keep
+enforcing — there is no offline install of anything, ours included.
+
+`failproofai publish` is the other half: build the three assets, cut the release, upload them.
+
+`pack`, `policy` and `p` are rewritten to `policies` above every dispatch, so older spellings
+still work — `pack list` becomes `policies` bare or `policies show <source>` with an argument,
+and `pack build` becomes `publish`. Write the new spelling.
+
+Full detail lives in `failproofai-policy-deploy/references/packs.md`.
 
 ## `harness`
 

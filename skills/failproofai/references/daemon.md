@@ -185,9 +185,8 @@ installed, it does not decide whether the machine requires it. `--no-daemon` mig
 only; off a TTY it falls through to `sudo -n`, fails, and prints the exact commands.
 
 `update` and `migrate` both work — dispatched in `bin/failproofai.mjs` (grep
-`args[0] === "update"`) *before* the `SUBCOMMANDS` guard. `update --help` and `migrate --help`
-do **not**: neither name is in `SUBCOMMANDS`, so the top-level help guard fires first and
-errors `Unexpected argument: migrate`. Their help blocks exist and are unreachable.
+`args[0] === "update"`). Both names are in `SUBCOMMANDS`, so `update --help` and
+`migrate --help` reach their own help screens rather than erroring on the leftover positional.
 
 `daemonVersionSkew()` compares `VERSION.daemon` against the CLI's `package.json` version, for
 the managed path only; on a `daemon.configured` machine `staleDaemonHint()` prints a much

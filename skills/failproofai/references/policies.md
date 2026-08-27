@@ -14,18 +14,26 @@ told apart only by the prefix the handler applies (`handler.ts`, grep `const pre
 
 | Source | Prefix | Turned on by |
 |---|---|---|
-| Builtin | `failproofai/<name>` | `enabledPolicies` in a `policies-config.json` |
+| Builtin | `failproofai/<name>` | **nothing, on a machine set up by this version** — one `alwaysOn` guard, plus `enabledPolicies` read only as a migration shim |
 | Explicit custom | `custom/<name>` | `customPoliciesPaths` |
 | Convention | `.failproofai-project/…`, `.failproofai-user/…` | nothing — presence is the switch |
 | Pack | `pack/<id>@<version>/<name>` | `installed.json` `enabled` list |
 | Cloud-managed | `cloud/<id>@<version>/<name>` | a fleet deploy, not this machine |
 
-`failproofai policies` prints all five, including a `Pack — <id>@<version>` block per pack
-and a read-only `Cloud-managed — deployment <n>` block (`manager.ts`, grep `Cloud-managed —
-deployment`). Notes saying packs are missing from that listing are stale. `pack list` is
-still the only place showing a pack's digest, source and effect.
+`failproofai policies` prints **four sections** — `Custom Policies`, `Convention Policies —
+<scope>`, a `Pack — <id>@<version>` block per pack, and a read-only `Cloud-managed —
+deployment <n>` block (`manager.ts`, grep `Cloud-managed — deployment`). There is no builtin
+section, because this build registers no builtins of its own to list. Its header counts
+**enabled pack policies only**: `<scopes> · <N> on`, or `<N> on · NOT ENFORCING` when packs
+are installed and no agent CLI is wired, or `nothing installed`.
 
-## The 39 builtins
+No command prints a pack's digest any more. `pack-cli.ts`'s `list()` still renders digest,
+source, effect and health, and nothing reaches it: bare `pack list` is rewritten to
+`policies` (which goes to `listHooks`), and `pack list <source>` is rewritten to `policies
+show <source>` (which goes to the remote preview). Read `installed.json` if you need the
+digest.
+
+## The 39 builtins, and where they went
 
 39 entries in `policy-catalog.ts`, 11 `defaultEnabled: true`, exactly 1 `alwaysOn`, and
 **zero marked `beta` today** (`grep -c 'beta: true' src/hooks/policy-catalog.ts` → 0). The
@@ -34,24 +42,33 @@ docs-site builtin catalog lists the same 39 and gives no total. The 11 are `sani
 `sanitize-bearer-tokens`, `protect-env-vars`, `block-env-files`, `block-sudo`,
 `block-curl-pipe-sh`, `block-push-master`, and `block-failproofai-commands`.
 
-That last one bypasses the enabled set entirely — it registers on every
-evaluation regardless of config, an active pause, or a config that failed to parse
-(`builtin-policies.ts`, grep `policy.alwaysOn ||`). Removing it is **refused with an error**,
-not silently ignored (grep `rejectAlwaysOnPolicies`), and it reads `LOCK` rather than `ON`.
-Because of it a machine with nothing enabled still reports `1/39 on`.
+**Only that last one still enforces from the npm package.** It is `alwaysOn`: it bypasses the
+enabled set entirely and registers on every evaluation regardless of config, an active pause,
+or a config that failed to parse (`builtin-policies.ts`, grep `policy.alwaysOn ||`). Removing
+it is **refused with an error**, not silently ignored (grep `rejectAlwaysOnPolicies`), and it
+reads `LOCK` rather than `ON`. It has to ship compiled in because a pack may not declare
+`alwaysOn` — a downloaded file no local command can switch off is the thing this guard exists
+to prevent.
 
-Three sets get confused constantly:
+The other **38 arrive as a pack like anyone else's**: `FailproofAI/policies`, fetched from a
+GitHub release, digest-verified, pinned to a concrete tag. **10 of the 38 are
+`defaultEnabled`**, so a bare `failproofai policies add FailproofAI/policies` turns on 10.
+Nothing ships from disk: `policy-pack/` is out of the package's `files` and `build`,
+`installBundledPack()` is deleted, and `core`, `failproofai` and `official` are retired
+spellings that throw *"ours is a pack like anyone else's now. Use FailproofAI/policies
+instead."* Only *installing* needs the network — an installed pack keeps enforcing offline.
 
 | Set | Size | Answers |
 |---|---|---|
-| `defaultEnabled` | 11 (10 in the pack) | what seeds the picker / a bare pack install |
-| `RECOMMENDED_POLICIES` | 14 | what guards a machine whose owner did not choose |
-| `POLICY_PRESETS` | 4 bundles | category themes: `secrets`, `git`, `ship`, `infra` |
+| `defaultEnabled` in `policy-catalog.ts` | 11 | nothing on its own — it reaches a machine only through the pack |
+| `defaultEnabled` in the pack | 10 | what a bare `policies add FailproofAI/policies` turns on |
+| Enforcing after `failproofai config` and nothing else | **1** | `block-failproofai-commands`, and that is the intended state |
 
-Recommended is hand-written, not derived: it adds `block-rm-rf`, `block-force-push` and
-`block-secrets-write`, none of which are `defaultEnabled`. `Dangerous Commands`, `Database`,
-`Packages & System` and `AI Behavior` are reachable by **no named preset**, so preset bundles
-can never give you `block-rm-rf` or `block-sudo`.
+`RECOMMENDED_POLICIES` (15 names) and `POLICY_PRESETS` (4 themed bundles) are **gone** —
+`policy-presets.ts` is deleted along with the wizard's policy step. Nothing installs a
+curated set on anyone's behalf any more, and no note should send a reader looking for one.
+The listing header counts enabled *pack* policies, so a machine with hooks and no pack reads
+`0 on` while the always-on guard is still denying; it is not counted and it is still there.
 
 ## `policies --install` / `--uninstall`
 
@@ -60,29 +77,71 @@ failproofai policies --install block-sudo --cli claude codex --scope project
 failproofai policies --install --custom ./security.policies.ts --cli claude --scope project
 ```
 
-- **Additive, always** — `replace ? incoming : union(previous, incoming)` (`manager.ts`,
-  grep `Default is additive`). Only the configure wizard passes `replace: true`, so
-  `--install a b` produces a superset, never exactly `{a, b}`.
+This is the **wiring** lane, not the choosing lane. Choosing is `policies add` / `policies
+remove`.
+
+- **A name is resolved against installed packs FIRST, then the compiled set** (`manager.ts`,
+  grep `A PACK first, then the compiled set`). A pack policy is switched on in
+  `installed.json` and taken out of the list — and if every name you gave was a pack policy,
+  the command **returns there**, having rewritten no settings file. This is the fix for
+  `remove block-sudo` printing "Disabled 0" while `block-sudo` kept denying: the pack is
+  where the switch is. A name two installed packs both declare is a hard error; disambiguate
+  as `<pack-id>:<name>`.
+- **`--install` with no names no longer opens a policy picker.** It wires hooks and leaves
+  `enabledPolicies` exactly as it found it. `promptPolicySelection` survives in
+  `install-prompt.ts` with no production caller; do not document it as a surface.
+- **Names that are not in any installed pack pull the pack down.** On a machine with no pack,
+  `installHooks` calls `addPack("FailproofAI/policies", { only: <your names> })` — so
+  `policies --install block-rm-rf` reaches the network, and `--install all` installs ours with
+  all 38 on. A fetch failure prints `Warning: could not fetch the policy pack (…)` and leaves
+  the names in `enabledPolicies` for the migration shim.
+- **Additive for `enabledPolicies`** — `replace ? incoming : union(previous, incoming)`
+  (grep `Default is additive`). Only the configure wizard passes `replace: true`, and it
+  passes back what it just read, so `--install a b` produces a superset, never exactly
+  `{a, b}`.
 - `--install all` expands to every non-beta builtin and **cannot be mixed** with names.
 - `--custom` is repeatable and additive. Only paths added this invocation are strictly
   validated; a carried path whose file vanished is dropped with a printed line, not an error
   (grep `Dropping custom policies path`).
-- Off a TTY with no names the picker returns **whatever that scope already had, unchanged**,
-  falling back to the 11 defaults only when nothing was enabled there (`install-prompt.ts`,
-  grep `If stdin is not a TTY`). Unknown names are deliberately carried, not pruned, and
+- Unknown names in an existing config are deliberately carried, not pruned, and
   `enabledPolicies` accepts `sanitize-jwt` and `failproofai/sanitize-jwt` alike.
 - Scope is rejected, not degraded: Codex, Copilot, Cursor, OpenCode and Pi are
-  **user|project only** and error on `--scope local`.
+  **user|project only** and error on `--scope local`. Scope applies to hook entries and
+  `enabledPolicies`; **a pack toggle is machine-level and ignores it.**
 - **`--uninstall` with no policy names removes the hook entries entirely** — it is not a
   narrower operation. `--beta` there is documented as "remove only beta policies" while
   `betaOnly` is read *only by telemetry* (`grep -n betaOnly src/hooks/manager.ts` → four hits,
   all a doc comment or a tracked field), so `policies --uninstall --beta` silently uninstalls
   **every** hook entry for the selected CLIs.
 
-## `policy add` / `policy remove`
+## `policies add` / `policies remove`
 
-Single-policy shortcut, exactly one name, default scope `user` (`bin/failproofai.mjs`, grep
-`args[0] === "policy"`).
+**`policies` is the noun.** `policy`, `pack` and `p` are rewritten to it at
+`bin/failproofai.mjs` before `SUBCOMMANDS` and every dispatch, so nothing anyone typed
+before breaks and no branch below ever sees the old spelling. Write `policies`; treat the
+other three as a compatibility note, not as commands. `pack list` → `policies`, `pack list
+<source>` → `policies show <source>`, `pack build` → `publish`.
+
+One lane, split by a slash. A policy name matches `/^[A-Za-z0-9._-]+$/` and so can never
+contain `/`; anything that does (or starts `github:`) is a pack source:
+
+```bash
+failproofai policies add                  # picker over every installed pack
+failproofai policies add block-sudo       # one policy — no slash
+failproofai policies add acme/guard       # a pack — the slash IS the routing rule
+failproofai policies remove acme/guard    # a policy, or a whole pack
+failproofai policies show acme/guard      # what it holds, before installing
+```
+
+Bare `policies add` / `policies remove` needs a terminal and **exits 1 without one** — the
+no-TTY refusal is checked before the empty-state branch, so a script gets
+`` `policies <action>` with no name needs a terminal to show you the list. `` plus the two
+scriptable spellings. **The pack half of this lane belongs to `failproofai-policy-deploy`**;
+what follows is the policy-name half.
+
+Exactly one name, default scope `user` (`bin/failproofai.mjs`). Two or more positionals is a
+hard error pointing at `policies --install <a> <b>`; an unknown flag is a hard error
+(`--scope`, `--cli`, `--beta` are the whole set).
 
 | | `add` | `remove` |
 |---|---|---|
@@ -120,16 +179,20 @@ governs everything below it.
 | `disabledCustomPolicies` | union |
 | `customPoliciesEnabled`, `llm` | first defined wins |
 
-- **You cannot disable a user-scope policy from project or local.** `policy remove X --scope
-  project` writes the file, prints `Disabled 1 policy(ies)`, and changes nothing observable
-  while the user scope still enables `X`.
+- **You cannot disable a legacy builtin from project or local.** `policies remove X --scope
+  project` writes the file and changes nothing observable while the user scope still enables
+  `X`. This is the builtin lane only: if an installed pack carries `X`, the name resolves to
+  the pack instead, is switched off in `installed.json` machine-wide, and the scope flag
+  never enters into it.
 - `policyParams` is first-scope-wins **per policy, not per key**. A project scope setting only
   `allowPaths` for `block-rm-rf` discards the user scope's entire `block-rm-rf` params object,
   including keys the project never mentioned.
 
 `enabledPolicies` is a presence list; `policyParams` is a sibling map on the same names.
-`failproofai policies` warns on `policyParams` keys that are not builtin names (typo
-detection) but never on unknown `enabledPolicies` entries.
+`failproofai policies` warns on `policyParams` keys **no installed pack declares** — in
+either spelling, the bare `<name>` or the qualified `pack/<id>/<name>` the dashboard writes
+— and stays silent when no pack is readable rather than calling every key a typo. Unknown
+`enabledPolicies` entries are never warned about.
 
 ```json
 {
@@ -139,11 +202,11 @@ detection) but never on unknown `enabledPolicies` entries.
 ```
 
 **An unparseable config soft-fails to `{enabledPolicies: []}`** after a stderr warning (grep
-`failed to parse config at`). One stray comma silently stops every builtin except the alwaysOn
-guard while the machine still looks protected; `syncConventionPolicies` refuses to write over
-such a file so the damage does not compound. Two display caveats in the listing (`manager.ts`,
-grep `statusHeads`): the per-scope status columns render **the same merged chip in every
-column**, so a `User | Project` header pair is not per-scope resolution — and the `Config:`
+`failed to parse config at`); `syncConventionPolicies` refuses to write over such a file so
+the damage does not compound. What one stray comma costs you now: the migration shim (every
+legacy builtin off), every `policyParams` object, and every entry in
+`disabledCustomPolicies` — so policies you deliberately switched off come back **on**. Packs
+are unaffected: their selection lives in `installed.json`, not here. The listing's `Config:`
 footer names only the user file, whatever scope you were editing.
 
 ## Convention policies and the filename trap
@@ -165,16 +228,28 @@ descriptive mirror written by that command, never authoritative.
 
 ## Policy packs
 
-Undocumented on the docs site (`grep -rn "failproofai pack" docs/policies/` finds nothing) but a
-first-class subcommand, and how the 38 non-alwaysOn builtins now ship
-(`policy-pack/failproofai-pack.json`, id `failproofai/builtins`, effect `enforce`).
+How every policy that is not the always-on guard reaches a machine, ours included: the pack
+`FailproofAI/policies`, effect `enforce`, 38 policies, 10 on by default, cut by `failproofai
+publish` like anyone else's. There is no vendored copy and no offline install — `policy-pack/`
+is out of the package's `files` and `build`, and `installBundledPack()` is deleted.
 
 ```bash
-failproofai pack list
-failproofai pack add FailproofAI/policies --category secrets,git
-failproofai pack add github:acme/finance@v1.2.0 --only block-refunds
-failproofai pack remove acme/finance          # the ID, never the source string
+failproofai policies                                     # what is installed here
+failproofai policies show acme/finance                   # manifest only, no code fetched
+failproofai policies add FailproofAI/policies --category sanitize,git
+failproofai policies add github:acme/finance@v1.2.0 --policy block-refunds
+failproofai policies remove acme/finance                 # the ID, never the source string
 ```
+
+**Put the pack id immediately after `remove`.** It reads `rest[0]` and nothing else, so
+`policies remove --scope user acme/finance` routes to the pack lane correctly and then takes
+`--scope` as the id. `add` is flag-aware and skips every value-taking flag; `remove` is not.
+
+`--policy` and `--only` are the same switch — teach `--policy`. Category slugs are
+`slugifyCategory()`: lowercase, non-alphanumeric runs collapsed to `-`, giving `sanitize`,
+`environment`, `dangerous-commands`, `infra-commands`, `git`, `database`, `packages-system`,
+`ai-behavior`, `workflow`. An unknown slug or an unknown policy name now **throws and names
+what the pack actually has**; it used to install the defaults in silence.
 
 Three release assets — `failproofai-pack.mjs`, `failproofai-pack.json`, `SHA256SUMS` —
 installed under `~/.failproofai/policies/packs/` with content-addressed
@@ -186,41 +261,60 @@ stops loading rather than silently running something else. It is **not a signatu
 controls the release controls `SHA256SUMS` too, and signing was deliberately deferred
 (`pack-store.ts`, grep `The trust this does and does not give you`).
 
-Selection resolution, in order (`pack-store.ts`, grep `resolveSelection`):
+**The artifact is imported once before `installed.json` is written**, and the install is
+refused if the manifest declares a name the artifact does not register, or the reverse
+(`verifyArtifactRegisters`). A refusal leaves the machine exactly as it was. This closes the
+worst pack failure there was: a one-name typo between the two files installed reporting
+"2/2 enabled" and then converted into a machine-wide deny, because a declared policy that
+never registers is precisely what the fail-closed guard denies for.
+
+Selection resolution, five outcomes (`pack-store.ts`, grep `resolveSelection`):
 
 | Reason printed | When |
 |---|---|
 | `everything in the pack` | `--all` |
-| `your selection` | `--category` and/or `--only`, unioned |
+| `your selection` | `--policy` and/or `--category`, unioned, on a first install |
+| `what you added, plus what was already on` | the same flags on a pack already installed |
 | `your existing selection` | no flags, already installed — an upgrade carries your picks |
 | `the pack's defaults` | no flags, first install — the author's `defaultEnabled` set |
 
-- **`--all` silently overrides `--only` and `--category`** — the early return sits above both
-  blocks, nothing warns. Unknown flags are ignored just as quietly: `--onlyy` installs the
-  pack's defaults instead.
-- A bare `pack add owner/repo` takes `defaultEnabled` — **10 of 38** for the builtins pack,
-  fewer than Recommended's 14. Adding the builtins pack is not equivalent to setup.
-- `pack remove` prints "re-adding it works offline". It does not: `addPack` always hits the
-  network and throws under `FAILPROOFAI_NO_DOWNLOAD`. The only disk-sourced install is
-  `installBundledPack()`, reading `policy-pack/` from the npm package.
+- **Selection flags MERGE; the interactive picker REPLACES.** `--category git` on an
+  installed pack means "*also* turn Git on" — the command's first word is `add`. The picker
+  sets `merge: false` because its list is the complete answer, which is what makes unticking
+  able to switch something off at all. An empty pick is a real answer, carried explicitly:
+  the pack is installed and enforcing nothing.
+- **A bare `policies add <owner>/<repo>` on a TTY asks twice before installing** — which
+  agents to guard, then which policies (pre-ticked from the *manifest*; the entry artifact is
+  never downloaded for a preview). Selection flags or a non-TTY skip both prompts, and only
+  then is "a bare add takes `defaultEnabled`" — 10 of 38 for ours — the whole story.
+- **`--all` silently overrides `--policy` and `--category`** — the early return sits above
+  both blocks, nothing warns. Unknown *flags* are still ignored just as quietly on this lane:
+  `--onlyy block-refunds` installs the defaults, because bin's unknown-flag rejection sits
+  below the source-routing branch.
 - **`remove` then `add` resets your selection to the pack's defaults** — removal deletes the
   `installed.json` record, so the carry-forward branch no longer sees a prior install.
-  Upgrading in place carries it; a remove/re-add does not, and nothing warns.
-- A tagless source resolves `releases/latest` once and pins the tag, printed as `(newest
-  release; pinned to <tag>)`. Re-running the same command later can install something else —
-  not reproducible in a Dockerfile.
-- **`pack list` exits non-zero whenever any recorded pack failed to load**, having printed the
-  listing fine. Exit 0 is not "listing worked".
-- Effect is **publisher-set**, whole-pack, with no CLI override — and `pack list`'s per-policy
-  chip is derived purely from selection, so it reads `on` inside an observe pack. Effect
-  appears once, in the header rows; the `failproofai policies` pack section does render
-  `observe` per row.
+  Upgrading in place carries it; a remove/re-add does not, and nothing warns. The
+  content-addressed artifact is deliberately left on disk.
+- A tagless source resolves through the `releases/latest` **redirect** (same host as the
+  assets, no rate limit, follows `FAILPROOFAI_PACK_BASE_URL`) and pins the tag, printed as
+  `(newest release; pinned to <tag>)`. GitHub redirects only for a published, non-prerelease
+  release, so a repo whose newest release is a draft or prerelease either pins an older
+  stable tag **without telling you** or errors. Name a tag when it matters; re-running the
+  same tagless command later can install something else.
+- An id is bound to the repo it first came from (`pack id X is already installed from Y`),
+  and the inverse bites: a pack whose entry bytes are byte-identical to an installed one
+  under a different id **absorbs and deletes that record**, printing `Replaced <ids> — same
+  artifact, so it was taken as this pack renamed`.
+- Effect is **publisher-set**, whole-pack, with no CLI override. The `failproofai policies`
+  pack section renders `observe` per row, so an observe pack cannot read as `on`.
 - Packs may not declare `alwaysOn`; the check is `"alwaysOn" in raw`, so even
   `"alwaysOn": false` refuses the install.
 
 Env: `FAILPROOFAI_PACK_DIR` (pack root), `FAILPROOFAI_PACK_BASE_URL` (mirror — covers asset
 URLs *and* the latest redirect), `FAILPROOFAI_NO_DOWNLOAD` (refuse to fetch; installed packs
-keep enforcing).
+keep enforcing). Installs send **no `Authorization` header at all**, by design — which is why
+a private repo publishes to nobody. **Publishing a pack of your own is
+`failproofai-policy-deploy`'s** (`failproofai publish`), as is the full source grammar.
 
 ## Cloud-managed vs local
 
@@ -328,7 +422,7 @@ inversion so a truncated file does not deny every tool call.
 **Pack.** Narrower and additive: when a pack the machine was told to *enforce* will not load,
 `missingGuards()` registers a synthetic `pack/failproofai-pack-unavailable` at priority 1
 (above builtins at 0), matching only the union of the missing policies' declared events and
-tools (`pack-failclosed.ts`). Its four carve-outs:
+tools (`pack-failclosed.ts`). Its five carve-outs:
 
 - Only `module_not_found`, `syntax_error`, `runtime_error`, `path_missing` trigger it —
   **`load_timeout` is deliberately excluded** as transient.
@@ -337,6 +431,11 @@ tools (`pack-failclosed.ts`). Its four carve-outs:
 - Skipped entirely during a session pause, so a paused session gets no signal at all.
 - A pack whose author marked nothing `defaultEnabled` installs completely inert, reports
   success, and can never trigger this check — an empty taken set means no missing guards.
+- **A pack narrowed with `--cli` does not deny on the agents it was never scoped to**
+  (`outOfScope`). Absent or empty `clis` still means every agent — and so does an
+  *unreadable* one: a `clis` of `"codex"` is a truthy string with a `.length` and an
+  `.includes`, and the check is `Array.isArray`, so a malformed scope over-denies rather
+  than silently guarding nothing.
 
 Pack *loading* fails open (bad manifest → zero packs and a logged reason); a pack the machine
 was told to *enforce* fails closed. Same subsystem, opposite directions, split on whether an

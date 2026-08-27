@@ -8,7 +8,7 @@ description: |-
   • publish a policy version, or draft one with `fp policies compose`;
   • know whether it actually fired — "did my policy do anything?", coverage, blocks;
   • roll it back, disable it, or promote observe → enforce;
-  • install a policy on one machine — scopes, the filename convention, packs.
+  • install a policy on one machine, or publish a pack — scopes, filename convention, `policies add <owner>/<repo>`.
 
   Served by `fp` for the fleet and the local CLI for a single machine.
 
@@ -38,9 +38,16 @@ If the rule does not exist yet — the user is describing a behaviour, an audit 
 line in a CLAUDE.md — that is authoring, and it happens first. Route there and come back with
 a file. If a file exists and the question is *where it runs*, you are in the right place.
 
-The two halves meet at exactly one command. `fp policies test` belongs to both: it is the
-author's last check and this skill's first step, and it is the only piece of the cloud lane
-that needs no server, no fleet and no account.
+The two halves meet at exactly one command. `fp policies test` belongs to both: it is this
+skill's first step, and it is the only piece of the cloud lane that needs no server, no fleet
+and no account.
+
+One step sits upstream of it and belongs to the author: the **policy backtest**, which replays
+a draft against stored fleet traffic and answers whether it fires on real failures *and*
+whether the hook it fires on can block at all. It has no CLI — it is a dashboard surface at
+`/<org>/policy-editor` — and reading its verdict is `failproofai-policy-author`'s job. If a
+draft arrives here having never been replayed, send it back before publishing: a policy that is
+correct on two handwritten cases can still be inert on every machine you deploy it to.
 
 ## Two lanes — infer which, do not ask
 
@@ -49,7 +56,7 @@ that needs no server, no fleet and no account.
 | "the fleet", "our machines", "everyone", a machine id, any `fp` output | Cloud |
 | a policy id plus "roll it back", "did it fire", "who is running it" | Cloud |
 | "this repo", "my machine", a path under `.failproofai/policies/` | Local |
-| "enable block-sudo", "install the builtins", a pack | Local |
+| "enable block-sudo", "install the builtins", a pack, `<owner>/<repo>` | Local |
 
 Both lanes can be live at once, and that is the normal case rather than an ambiguity: you
 deploy from the cloud side, and the local lane is what the artifact becomes once it lands on
@@ -377,8 +384,30 @@ writes source, it does not verify behaviour.
 ## The local lane
 
 What lands on one machine, and what stops a policy running once it is there. Full detail in
-`references/local-lane.md`; packs in `references/packs.md`. Four things belong here in the
+`references/local-lane.md`; packs in `references/packs.md`. Five things belong here in the
 SKILL, because each of them silently produces a machine that looks protected and is not.
+
+**A pack is how a policy reaches a machine without the cloud.** The npm package ships no
+policies to enable any more — installing it and running `failproofai config` leaves exactly one
+thing enforcing, the compiled always-on guard `block-failproofai-commands`. That is the intended
+end state, not a broken install, and it is the assumption to check first when someone says a
+machine "has failproofai" and nothing is firing.
+
+```bash
+failproofai policies show FailproofAI/policies    # read it before running it
+failproofai policies add FailproofAI/policies     # our builtins, 10 of 38 on
+failproofai policies add acme/deploy-guard --category git
+failproofai publish ./my-policies.mjs --repo acme/deploy-guard
+```
+
+**A slash means a pack source; no slash means a policy name.** That one rule routes the whole
+`policies add|remove` surface — a policy name cannot contain `/`, so there is nothing to guess.
+`policies add block-sudo` turns on one builtin at a scope; `policies add acme/deploy-guard`
+installs a pack machine-wide, where `--scope` does nothing. `core`, `failproofai` and `official`
+are retired spellings that now throw: type `FailproofAI/policies` in full, and expect the network
+— there is no offline install of anything, ours included.
+
+`pack`, `policy` and `p` are all aliases of `policies` and still work; write `policies`.
 
 **The filename convention.** Any file matching `/policies\.(js|mjs|ts)$/` in
 `.failproofai/policies/` (project) or `~/.failproofai/policies/` (user) auto-loads with no

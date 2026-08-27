@@ -257,7 +257,7 @@ machine id, and moving capture paths.
 
 ```bash
 failproofai policies --install --cli claude --scope user
-failproofai policy add block-rm-rf
+failproofai policies add block-rm-rf
 ```
 
 Supported: `claude`, `codex`, `copilot`, `cursor`, `opencode`, `pi`, `hermes`, `openclaw`,

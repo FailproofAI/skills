@@ -59,9 +59,39 @@ channels; it is not a dry run.
 
 **Policy** — a small JavaScript function that runs before or after a tool call and returns
 `allow`, `deny` or `instruct`. It is the only noun in the product evaluated *during* activity;
-everything else is post-hoc. Five sources feed one evaluation: `builtin` (39 shipped in the
-npm package), `custom` (an explicit path), `convention` (a filename in a policies directory),
-`pack`, and `cloud`.
+everything else is post-hoc. Policies **do not ship inside the npm package**: they arrive as
+packs, chosen by whoever installs them. Five sources feed one evaluation: `pack` (a GitHub
+release you installed), `custom` (an explicit path), `convention` (a filename in a policies
+directory), `cloud` (a fleet deployment), and `builtin` — which now contributes exactly one
+policy, the always-on guard.
+
+**Pack** — how policies arrive. A published GitHub release carrying three assets: an entry
+artifact, a manifest, and `SHA256SUMS`. Installed with `failproofai policies add
+<owner>/<repo>`, verified by digest, pinned to a concrete tag. Ours is `FailproofAI/policies` —
+38 policies, 10 on by default — fetched over the network exactly like a stranger's. `core`,
+`failproofai` and `official` are retired spellings that now throw and name the replacement.
+
+**Pack source** — where a pack comes from, and what a **slash** identifies. A policy name
+matches `/^[A-Za-z0-9._-]+$/`, so a slash is illegal in one and unambiguous in the other:
+`policies add block-sudo` turns one policy on, `policies add acme/deploy-guard` installs a
+pack. `@<tag>` or `@<commit-sha>` pins a version; tagless resolves the newest published
+release and records the concrete tag it landed on.
+
+**Pack manifest** — `failproofai-pack.json`: the pack's id, version, effect, and one row per
+policy (`name`, `description`, `category`, `defaultEnabled`, `match`). It is all that
+`failproofai policies show <owner>/<repo>` reads and all the install picker lists, so looking
+at a stranger's pack never downloads or runs a stranger's code. A pack that declares
+`alwaysOn` is refused outright.
+
+**Pack digest** — the SHA-256 of the entry artifact, recorded at install and **re-verified
+immediately before every import**, so a pack cannot change under a machine after it was taken.
+It is integrity, not provenance: whoever controls the release controls `SHA256SUMS` too.
+
+**Always-on guard** — `block-failproofai-commands`, the single policy compiled into the npm
+package. It bypasses the enabled set entirely, so a session pause, an empty machine and a
+config file that failed to parse all leave it running — which is exactly why it cannot travel
+the pack lane, where nothing may declare `alwaysOn`. On a freshly configured machine it is the
+only thing enforcing, and that is the intended state.
 
 **Policy version** — one immutable snapshot of a policy's source. Publishing mints a new
 version and **never edits in place**. Publishing also **deploys nothing**: the version sits
@@ -88,10 +118,37 @@ evaluated and blocked totals, per-policy results over a window. `fp guardrails s
 drifted. `fp fleet diff --json` computes `drifted` for you. Two different problems hide in
 one word: a machine can be in sync and dead, or alive and behind.
 
-**Pack** — policies not compiled into the build, published as a GitHub release: one entry
-artifact plus a manifest, verified against the release's `SHA256SUMS` at install and
-**re-verified before every import**, so a pack cannot change under a machine after it was
-installed. Adding one with no tag installs the newest release and pins it.
+## Vetting a draft
+
+Six words that decide whether a policy is worth deploying. All of them come from the
+**backtest**, and none of them is a promise about production.
+
+**Backtest** — replaying a candidate policy against stored fleet traffic to see what it would
+have said. Lives only in the dashboard, at `/<org>/policy-editor`; there is no
+`fp policies backtest`. It measures **aim, not outcome**: the recorded agent cannot react, so a
+deny did not stop the call, and everything after it in that session still happened.
+
+**Enforceable** — of the calls a draft fired on, how many landed on a `(harness, event)` pair
+verified to *block*. Absent means **not verified**, never "block". `PreToolUse` blocks on all
+twelve harnesses and is the safe floor; `PostToolUseFailure` blocks on none of them.
+
+**Observe-only** — the verdict for a draft that fires on real failures at a hook its target
+harness cannot block: correct and completely inert. Enforceability is judged **before**
+precision, so a post-call catch scoring 100% is refused rather than shipped, and the refinement
+steers toward a `PreToolUse` preflight instead of a deeper reactive catch.
+
+**Precision** — of the fires, the share that landed on calls which genuinely failed. Under 80%
+the verdict is `drowns`; at or over it with thin coverage the verdict is `narrow`, which is
+publishable and says so.
+
+**Noise** — fires per catch. `5.2×` means the agent is interrupted five times for every real
+failure the policy would have aimed at. It is the number an operator actually lives with.
+
+**Candidacy** — the pre-flight asking whether a policy can address a finding *at all*, run
+before any drafting. It judges the remedy, not the reporter's framing, and still refuses
+roughly half of policy-shaped findings whose headline describes a cross-call effect ("retried
+14 times", "burned the run budget"). Restating the finding with the enforceable action in the
+title usually clears it.
 
 ## The machinery
 
@@ -148,10 +205,14 @@ This is the section to read twice.
 | **Finding** | in the cloud, a triageable record with an id, a status and an assignee | locally, a regenerated report card with none of those. A local finding cannot be assigned because it does not exist between scans |
 | **Machine id / label** | the id: a UUID, the server's key, stable, never the hostname | the label: a display string, mutable, free to collide |
 
-Three more that are not synonyms, however they read:
+Four more that are not synonyms, however they read:
 
+- **Enforceable is not enforcing.** `enforce` is what you told the machine to do with a
+  verdict; `enforceable` is whether the hook can act on one at all. A policy deployed in
+  `enforce` on an event its harness only observes is inert, and no policy setting changes it.
 - **Publishing is not deploying.** `fp policies publish` mints a version; `fp fleet deploy`
-  puts it on machines. Two acts, two commands.
+  puts it on machines. Two acts, two commands. `failproofai publish` is a third thing again —
+  it cuts a **pack** release on GitHub.
 - **`disable` stops enforcement; `delete` (archive) does not.** If you want a policy to stop
   deciding, disable it.
 - **Local-only is not half-installed.** A machine with hooks, policies and a daemon and no
