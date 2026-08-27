@@ -2,7 +2,7 @@
 /**
  * How much of what your agents ACTUALLY call can a builtin policy match?
  *
- *   node fleet-tool-coverage.mjs                 query the fleet via agenteye
+ *   node fleet-tool-coverage.mjs                 query the fleet via fp
  *   node fleet-tool-coverage.mjs --file t.json   use a saved `list tools` response
  *   node fleet-tool-coverage.mjs --json          machine-readable
  *
@@ -54,7 +54,7 @@ Cross-references the tool names your fleet actually emits against what each
 harness canonicalizes, so you can see how much of the surface a builtin can
 match at all.
 
-  --file <p>  a saved \`agenteye --json list tools\` response (skips the query)
+  --file <p>  a saved \`fp --json list tools\` response (skips the query)
   --bin <n>   cloud CLI binary (default: whichever of fp / agenteye resolves)
   --json      machine-readable output
 `.trim());
@@ -79,8 +79,8 @@ const CLIS = cap.clis;
 // ------------------------------------------------------------------- input
 
 /**
- * The cloud CLI is mid-rename: docs say `fp`, the shipped artifact is still
- * `agenteye`. Resolve rather than hardcode either — see references/harnesses.md.
+ * Two cloud CLIs can be on PATH: `fp` (current, dist `fp-cloud-cli`) and the legacy
+ * `agenteye` 0.1.13. Prefer `fp`; resolve rather than hardcode — see references/harnesses.md.
  */
 function resolveBin() {
   if (args.bin && args.bin !== true) return String(args.bin);
@@ -101,7 +101,7 @@ if (args.file && args.file !== true) {
   if (!bin) {
     console.error(
       "Neither `fp` nor `agenteye` is on PATH. Install the cloud CLI, or pass a saved\n" +
-        "response with --file (produce it with: agenteye --json list tools > tools.json).",
+        "response with --file (produce it with: fp --json list tools > tools.json).",
     );
     process.exit(2);
   }

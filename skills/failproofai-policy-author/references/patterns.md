@@ -114,7 +114,7 @@ customPolicies.add({
 
 Points that matter:
 - **Get the raw name from evidence, not memory.** The audit finding's `examples[]`, or
-  `agenteye list tools` for a fleet. A guessed tool name matches nothing and fails silently.
+  `fp list tools` for a fleet. A guessed tool name matches nothing and fails silently.
 - **`toolInput` keys are raw too.** Canonicalization of input keys is also per-tool and
   per-harness (`*_TOOL_INPUT_MAP`), so an unmapped tool's arguments arrive exactly as the
   harness sent them. Read the payload before assuming a key name.
