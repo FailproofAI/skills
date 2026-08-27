@@ -17,21 +17,15 @@ The format is shared across agents, so one definition works everywhere.
 
 ## Skills in this collection
 
-Choose one of two entry points:
-
-- Install **`failproofai-master`** when an agent should receive the complete product context
-  in one self-contained skill: local runtime, Cloud, SDK, policies, publishing, evaluator,
-  setup, commands, terminology, and routing.
-- Install **`failproofai`** when the agent mainly needs to set up, operate, or troubleshoot
-  FailproofAI and can hand specialist work to separately installed skills.
-
-The remaining skills are focused modules. Installing a focused skill does not automatically
-install its siblings; installing the whole repository does.
+**`failproofai` is the single umbrella skill.** It carries the complete product context in
+one self-contained folder: local runtime, Cloud, SDK, policies, publishing, evaluator, setup,
+commands, terminology, and troubleshooting. The remaining skills are focused companions.
+Installing one focused skill does not automatically install its siblings; installing the
+whole repository does.
 
 | Skill | What it does | Source of truth |
 |---|---|---|
-| [`failproofai`](skills/failproofai/) | **Start here.** The way into the product - what FailproofAI is, setting a machine up from zero (local-only or cloud-connected), the `failproofaid` daemon, moving history in with backfill/flush/capture paths, installing hooks and policies across 12 agent CLIs, local vs cloud audits, fleet and org operations, upgrade/uninstall, and troubleshooting by symptom. Routes to the specialist skills below when one owns the job, and stands alone when they aren't installed. | Maintained here. Not synced from anywhere - edit in this repo. |
-| [`failproofai-master`](skills/failproofai-master/) | The complete FailproofAI product context in **one self-contained skill**: local runtime and daemon, FailproofAI Cloud, Python SDK, policy authoring and GitHub pack publishing, evaluator, setup, commands, terminology, troubleshooting, and the sibling-skill directory. Give this to an agent that should understand the whole product without depending on the other skills being installed. | Maintained here. Not synced from anywhere - edit in this repo. |
+| [`failproofai`](skills/failproofai/) | **The main skill.** A complete, standalone FailproofAI product package: explain the product, set up a machine, operate the local runtime and daemon, use FailproofAI Cloud, understand and author policies, publish GitHub policy packs, instrument custom agents, work with evaluators, inspect every command, and troubleshoot by symptom. It also routes to focused sibling skills when they are installed. | Maintained here. Not synced from anywhere - edit in this repo. |
 | [`failproofai-policy-author`](skills/failproofai-policy-author/) | Turn what agents keep doing wrong into enforcement for [failproofai](https://github.com/FailproofAI/failproofai) - triage a `failproofai audit` or FailproofAI Cloud findings, convert a CLAUDE.md/AGENTS.md into policies, or take a plain complaint ("agents keep force-pushing") and enforce it. Checks the shipped builtins and their params before writing anything, since most requests are one line of config; knows which of the 12 supported agent CLIs actually enforce a given event, so it never ships a deny the harness discards; tests every policy it authors. | Maintained here. Not synced from anywhere - edit in this repo. |
 | [`failproofai-policy-publish`](skills/failproofai-policy-publish/) | The publishing companion to policy authoring - take tested policies, build an installable pack, publish its release assets to GitHub with `failproofai publish`, preview it, and verify the consumer path with `failproofai policies add <owner>/<repo>`. Cloud fleet rollout remains part of `fp-cloud-cli`. | Maintained here. Not synced from anywhere - edit in this repo. |
 | [`fp-cloud-cli`](skills/fp-cloud-cli/) | Operate FailproofAI Cloud with `fp`: inspect telemetry, evals and usage; triage issues and audits; manage keys, users, orgs, and settings; publish Cloud policy versions; deploy them to fleet machines; observe enforcement; promote or roll back. Global options go **before** the command: `fp --json sessions`, not `fp sessions --json`. | Synced from `FailproofAI/failproofai` → `fp-cloud-cli/skill/`. Do **not** hand-edit here. |
@@ -73,14 +67,10 @@ Using the [`skills`](https://skills.sh) CLI (`vercel-labs/skills`). It auto-dete
 your agent(s); pass `-a` to be explicit.
 
 ```bash
-# Install every skill in this repository.
-# The agent receives the master skill plus every focused specialist.
+# Recommended: install the umbrella and every focused companion.
 npx skills add FailproofAI/skills
 
-# Install the complete product context as one self-contained skill.
-npx skills add FailproofAI/skills --skill failproofai-master
-
-# Install the setup/operations entry point only.
+# Install only the complete, self-contained umbrella skill.
 npx skills add FailproofAI/skills --skill failproofai
 
 # Install one focused specialist.
@@ -109,10 +99,10 @@ the authoritative list.
 
 ### What each install gives the agent
 
-`npx skills add FailproofAI/skills --skill failproofai-master` installs one folder. That
-folder contains its own complete product reference; it does not download or invoke the other
-skills as hidden dependencies. Its directory tells the agent which focused skill to prefer
-when those skills are also installed.
+`npx skills add FailproofAI/skills --skill failproofai` installs one self-contained folder
+with the complete product reference. It does not download or invoke the focused skills as
+hidden dependencies, and it does not require them to answer product questions or perform the
+core setup and operations workflows.
 
 `npx skills add FailproofAI/skills` installs every discovered skill in the repository. The
 agent can then route a task to the narrowest matching skill—for example authoring with
@@ -165,16 +155,12 @@ skills/                         ← this repo
 ├── templates/SKILL.template.md ← starter for a new skill (or use `npx skills init`)
 ├── scripts/validate-skills.py  ← frontmatter/layout validator (run before merge)
 └── skills/                     ← one self-contained folder per skill
-    ├── failproofai/             ← the umbrella: start here
+    ├── failproofai/             ← complete umbrella: start here
     │   ├── SKILL.md
     │   ├── references/          ← concepts · setup · transfer · daemon · policies
     │   │                           harnesses · audits · sessions · cloud · cli
-    │   │                           troubleshooting
-    │   └── agents/openai.yaml
-    ├── failproofai-master/      ← the whole product, one artifact
-    │   ├── SKILL.md
-    │   ├── references/          ← commands · verticals · setup · directory
-    │   │                           env-vars · literals · glossary
+    │   │                           troubleshooting · command catalog · product verticals
+    │   │                           env vars · literals · glossary · skill directory
     │   └── agents/openai.yaml
     ├── failproofai-policy-author/
     │   ├── SKILL.md

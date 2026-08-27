@@ -1,16 +1,16 @@
 ---
 name: failproofai
 description: |-
-  The way into FailproofAI — both CLIs, the daemon, and the specialist skills. Reach for it on "set up failproofai", "connect this machine", or "why isn't my agent showing up?"
+  The complete FailproofAI skill — setup, local runtime, Cloud, SDK, policies, publishing, evaluator, commands, concepts, and troubleshooting. Give it to an agent that needs to understand or operate FailproofAI without another skill.
 
   Trigger when the user wants to:
-  • set up from zero — install, connect a machine, wire hooks into 12 agent CLIs, verify a session lands;
-  • move history — backfill sessions, flush the spool, add capture paths, upgrade or migrate a machine;
+  • set up from zero — install, connect, wire 12 agent CLIs, verify a session lands;
+  • move history — backfill sessions, flush the spool, add capture paths, or migrate a machine;
   • run the daemon — start, inspect, upgrade or remove it, diagnose delivery;
   • find the right surface — audits, sessions, policies, keys and orgs, fleet deploys, self-hosting;
   • fix a live machine — a stopped daemon, a session that never lands, a dead hook.
 
-  Routes policy authoring to `failproofai-policy-author`, pack publishing to `failproofai-policy-publish`, Cloud and fleet work to `fp-cloud-cli`, scoring to `agenteye-evaluator`, instrumentation to `failproofai-sdk`, and full-product reference questions to `failproofai-master`.
+  It can stand alone. When focused sibling skills are installed, route policy authoring to `failproofai-policy-author`, pack publishing to `failproofai-policy-publish`, Cloud and fleet work to `fp-cloud-cli`, scoring to `agenteye-evaluator`, and instrumentation to `failproofai-sdk`.
 ---
 
 # FailproofAI
@@ -21,8 +21,9 @@ gateways, self-hosted assistants, and your own instrumented agents.
     Session  →  Audit  →  Finding  →  Issue  →  Policy
     what happened   is it a pattern   what broke   who owns it   stop it recurring
 
-This skill is the entry point for the whole product: it orients, sets a machine up, moves
-data, operates the fleet, and **routes to the specialist skill** when one owns the job.
+This is the single umbrella for the whole product. It orients, explains every vertical,
+sets a machine up, moves data, operates the fleet, and carries enough reference material to
+work alone. When focused sibling skills are installed, route to them for a smaller context.
 
 Source pointers are grep anchors inside the `failproofai` package — `node_modules/failproofai/`
 in an installed project, the repo root in a checkout. They survive refactors; line numbers
@@ -108,7 +109,7 @@ product; the evaluator was not, and `agenteye-evaluator` is its real current nam
 | Query FailproofAI Cloud — browse sessions, events, errors, evals; triage issues/alerts; manage keys, users, roles, settings | **`fp-cloud-cli`** (the cloud CLI skill) |
 | Decide what to score, or build/extend an evaluator service | **`agenteye-evaluator`** |
 | Instrument an agent that is **not** one of the 12 supported CLIs — a Python/LangChain/custom loop | **`failproofai-sdk`** |
-| Every surface at once — the whole product reference, when this file's summary runs out | **`failproofai-master`** |
+| Every surface at once — product architecture, commands, terminology, setup, and skill selection | **stay here** |
 | Anything local-machine: install, connect, daemon, backfill, flush, capture paths, upgrade, uninstall | **stay here** |
 | Keys and org *concepts*, self-hosting, "what is X" | **stay here** |
 
@@ -470,3 +471,10 @@ Collected here because getting one wrong wastes a turn or hangs the session:
 | FailproofAI Cloud: CLI surface, HTTP API, keys and permissions, orgs, self-hosting | `references/cloud.md` |
 | Every `failproofai` command and flag, env vars, on-disk paths | `references/cli.md` |
 | Symptom → check → cause → fix, in depth | `references/troubleshooting.md` |
+| End-to-end setup across the local and Cloud halves | `references/end-to-end-setup.md` |
+| Complete command catalog for both binaries | `references/command-catalog.md` |
+| Observe, enforce, evaluate, audit, and manage as product workflows | `references/product-verticals.md` |
+| Environment variables and configuration locations | `references/env-vars.md` |
+| Legacy literals that must not be renamed | `references/literals.md` |
+| Product terminology | `references/glossary.md` |
+| Every sibling skill, ownership boundary, and documentation map | `references/skill-directory.md` |

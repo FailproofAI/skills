@@ -1,4 +1,4 @@
-# Every command of both binaries
+# Complete command catalog for both binaries
 
 The `fp` surface in full — all 23 commands, every subcommand, real flag spellings,
 permissions, and the `--json` shape where the CLI states one. Then a compact map of the

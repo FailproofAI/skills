@@ -1,4 +1,4 @@
-# Setup: from nothing to a session you can see
+# End-to-end setup: from nothing to a session you can see
 
 This file stands alone. It assumes no sibling skill is installed and nothing on this
 machine is wired up. Two binaries, two installs, two independent verifications.

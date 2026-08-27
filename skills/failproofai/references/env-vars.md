@@ -1,4 +1,4 @@
-# Environment variables and where config lives
+# Environment variables and configuration locations
 
 **The rule is one line: the prefix follows the binary.**
 

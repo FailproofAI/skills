@@ -121,7 +121,7 @@ the wrong half installs nothing.
 | `failproofai` | — | maintained in this repo |
 | `failproofai-policy-author` | — | maintained in this repo |
 | `failproofai-policy-publish` | — | new |
-| `failproofai-master` | — | this skill |
+| `failproofai` | — | the complete umbrella skill |
 
 **The three mirrors are marked "do not hand-edit."** Never edit files under
 `skills/fp-cloud-cli/`, `skills/failproofai-sdk/` or `skills/agenteye-evaluator/`. If one

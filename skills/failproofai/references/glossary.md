@@ -1,4 +1,4 @@
-# Glossary
+# FailproofAI glossary
 
 The product nouns. Enough to *explain* FailproofAI, not just drive it. Start at *Words that
 mean two things* — that section is where the wasted hours actually go.

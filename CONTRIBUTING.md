@@ -89,7 +89,7 @@ top of not hand-editing the mirrored folder: don't add your own commits to a
 `sync/*` branch either — the next run discards them without warning. Changes
 outside the mirrored folder (a README row, this file) go in a normal PR.
 
-Everything else under `skills/` — `failproofai`, `failproofai-master`,
-`failproofai-policy-author`, `failproofai-policy-publish` — is maintained here and
+Everything else under `skills/` — `failproofai`, `failproofai-policy-author`,
+`failproofai-policy-publish` — is maintained here and
 edited normally. If a mirror is wrong, fix it upstream or carry the correction in
-one of those four; never patch the mirror in place.
+one of those three; never patch the mirror in place.

@@ -1,4 +1,4 @@
-# The skill family, and the docs behind it
+# The skill family and the docs behind it
 
 Seven skills cover FailproofAI. They overlap deliberately at the edges and refuse each
 other's work in the middle, so the routing sentence matters more than the description: pick
@@ -10,7 +10,7 @@ on **what the user is trying to change**, not on which nouns they said.
          ├── fp-cloud-cli ───────────────► query and administer FailproofAI Cloud
          ├── failproofai-sdk ────────────► instrument an agent that is not one of the 12 CLIs
          ├── agenteye-evaluator ─────────► decide what to score, build the scoring service
-         └── failproofai-master ─────────► all of it, at full depth, in one skill
+         └── failproofai ────────────────► all of it, at full depth, in one skill
 
 ## Install any of them
 
@@ -30,7 +30,7 @@ with that command.
 maintenance bug: the next sync silently reverts your change, and in the meantime two copies
 of the same claim disagree. Fix upstream, or carry the correction in a skill that is
 maintained here — `failproofai`, `failproofai-policy-author`, `failproofai-policy-publish`,
-`failproofai-master`.
+`failproofai`.
 
 Two of the three were renamed with the product; the evaluator was not. **`agenteye-evaluator`
 is its real current name** — do not "fix" it. The renamed mirror folders now match their
@@ -120,14 +120,14 @@ which is why "my events never appear" splits between this skill and `failproofai
 The one skill that keeps the old name, because the package did: distribution
 `agenteye-evaluator`, module `agenteye_evaluator`, user-agent `agenteye-server/<version>`.
 
-### `failproofai-master` — all of it
+### `failproofai` — all of it
 
 | | |
 |---|---|
 | **Owns** | the whole product at full depth in one skill: both binaries' complete command surfaces, every vertical (observe, enforce, audit, administer, instrument, evaluate), env vars, the literals that must never be renamed, the glossary, and this directory |
 | **Refuses** | nothing on the product — which is exactly why it is the *last* resort, not the first. It is large |
 | **Route to it when** | a specialist's summary has run out, the question spans three or more of them at once, or the user explicitly wants the full reference |
-| **Install** | `npx skills add FailproofAI/skills --skill failproofai-master -a claude-code` |
+| **Install** | `npx skills add FailproofAI/skills --skill failproofai -a claude-code` |
 | **Maintained** | in this repo |
 
 ## Naming, so cross-references resolve

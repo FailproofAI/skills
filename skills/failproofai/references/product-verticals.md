@@ -1,4 +1,4 @@
-# The five verticals, as workflows
+# The five product verticals as workflows
 
 Observe, enforce, evaluate, audit, manage. Each section is the question a user actually asks,
 the command that answers it, and the trap that makes the obvious command answer something
