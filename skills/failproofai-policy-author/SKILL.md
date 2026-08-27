@@ -1,18 +1,18 @@
 ---
 name: failproofai-policy-author
 description: |-
-  The way to turn what an agent keeps doing wrong into enforcement — failproofai policies that fire on every tool call. Reach for it on vague phrasing: "my agent keeps force-pushing", "it deleted my files again" — a complaint, not a policy request.
+  The way to turn what an agent keeps doing wrong into enforcement — failproofai policies that fire on every tool call. Reach for it on vague phrasing: "my agent keeps force-pushing" — a complaint, not a policy request.
 
   Trigger when the user wants to:
   • act on an audit — turn `failproofai audit` findings into fixes, or ask which policies actually work;
   • stop a recurring behaviour, in plain words or as "write a policy that blocks X";
   • enforce a rules file — make a CLAUDE.md / AGENTS.md real instead of advisory;
   • enable an existing builtin — usually the right answer, checked before authoring;
-  • work from Failproof AI Cloud — findings, plus which hooks fail or over-deny.
+  • work from FailproofAI Cloud — findings, plus which hooks fail or over-deny.
 
-  Served by the `failproofai` CLI and the policy files it loads.
+  Served by the `failproofai` CLI.
 
-  NOT for reading telemetry or operating Failproof AI Cloud (that's `agenteye-cli`), designing evaluator scoring logic (`agenteye-evaluator`), fixing the bug an agent introduced, or repo invariants that belong in tests.
+  NOT for shipping a policy onward — publishing a version, `fp fleet deploy`, rollback, proving it fired (`failproofai-policy-deploy`); nor telemetry or running FailproofAI Cloud (`fp-cloud-cli`), evaluator scoring (`agenteye-evaluator`), or repo invariants that belong in tests.
 ---
 
 # failproofai Policies
@@ -45,11 +45,11 @@ and confirm at the end.
 
 **3. The user asks for a policy outright.** *"Write a policy that blocks X."* Straight to *The authoring core*.
 
-**4. Findings live in Failproof AI Cloud.** The org runs [Failproof AI Cloud](https://app.befailproof.ai)
+**4. Findings live in FailproofAI Cloud.** The org runs [FailproofAI Cloud](https://app.befailproof.ai)
 and wants its findings enforced — or wants to know which of their policies are actually
-working. Failproof AI Cloud sees the whole fleet, so it answers things a local audit cannot: which
+working. FailproofAI Cloud sees the whole fleet, so it answers things a local audit cannot: which
 hooks are *failing* (and therefore enforcing nothing), and which are denying so often the
-rule is probably mis-scoped. ***Sourcing findings from Failproof AI Cloud*** has the procedure.
+rule is probably mis-scoped. ***Sourcing findings from FailproofAI Cloud*** has the procedure.
 
 **5. The user has a rules file agents keep ignoring.** *"Agents keep skipping what's in my
 CLAUDE.md."* Prose rules are advisory — the agent reads them (maybe) and forgets them under
@@ -77,7 +77,7 @@ The five entries above are not a menu to present back. Read what is already in f
 | They named a policy, a finding, or a dashboard row | 1, **single-finding branch** — that one only, not a sweep |
 | A past-tense complaint — "keeps", "again", "it deleted my…" | 2 — translate it into a tool call |
 | "write a policy that…", an event name, a tool name | 3 |
-| `agenteye` output, an issue id, "our fleet", "in prod" | 4 |
+| `fp` output, an issue id, "our fleet", "in prod" | 4 |
 | A path to a CLAUDE.md / AGENTS.md, or "my rules file" | 5 |
 
 If two apply, take the more specific one and say which in a single line. Asking *"which
@@ -148,6 +148,10 @@ a row in the dashboard — do **not** run the full triage. Handle just that one:
    is worth doing at all:
 
    ```bash
+   # $SKILL_DIR is this skill's own folder — the directory you were told to read
+   # this file from. Export it once; every node "$SKILL_DIR/…" below then works.
+   export SKILL_DIR=/path/to/skills/failproofai-policy-author
+
    node "$SKILL_DIR/scripts/attribute-findings.mjs" --name <finding>
    ```
 
@@ -165,15 +169,18 @@ a row in the dashboard — do **not** run the full triage. Handle just that one:
 Mention what else is unaddressed in one line at the end — do not expand into a full triage
 they did not ask for.
 
-Only run the full the full triage below sweep when they ask broadly: "what should I do about my audit",
+Only run the full triage sweep below when they ask broadly: "what should I do about my audit",
 "harden this repo", "fix these findings".
 
 ### Read the findings
 
 There is **no machine-readable output flag**. `RunAuditOptions` declares `--json`, `--since`,
-`--cli`, `--project`, `--limit` and more, but `runAuditCli` parses only `--help` — every
-other argument is rejected outright (`failproofai audit --json` errors). The one programmatic
-path is the dashboard cache, which every audit run writes:
+`--cli`, `--project`, `--limit` and more, and `runAuditCli` reads none of them. It parses six
+arguments and no others — `--help`/`-h`, `--scheduled`, `--status`, `--no-schedule`,
+`--schedule [days]`, `--email[=<addr>]` — so every declared option above is rejected
+(`failproofai audit --json` errors). The six are about scheduling and delivery; **none of
+them changes the output format**. The one programmatic path is the dashboard cache, which
+every audit run writes:
 
 ```bash
 cat ~/.failproofai/audit/dashboard.json
@@ -503,7 +510,7 @@ tool a harness emits, and an unmapped one arrives under its raw name with `ctx.c
 Canonicalization decides whether the *builtins* match, not whether you can see the call.
 Match the raw name, scope it with `ctx.cli`, and expect the name to differ per harness.
 
-`agenteye list tools` shows what a fleet actually emits — a policy matching a tool nobody
+`fp --json list tools` shows what a fleet actually emits — a policy matching a tool nobody
 calls is dead on arrival, and a harness's own tools are exactly where that goes wrong.
 
 ### Write the file
@@ -521,8 +528,38 @@ See `references/patterns.md` for worked examples per event type.
 Loading and execution are both fail-open — a broken policy is indistinguishable from a
 working one unless you test it. Never report a policy as done without this step.
 
-Use the bundled runner. Substitute `$SKILL_DIR` with the path to this skill's own folder —
-the directory you were told to read this file from:
+**The fast first pass is `fp policies test`.** No server, no fleet, **no auth** — it executes
+the real file against one context you describe and prints what each registered policy
+decided. It resolves `import { deny } from "failproofai"` with nothing installed in the
+working directory (the CLI shims the module), so it runs in an empty repo. Needs `node` on
+PATH. It is also the one `policies` subcommand an API key can drive; every other
+`policies` / `fleet` / `guardrails` subcommand exits 2 under one, so CI cannot drive them.
+
+```bash
+fp --json policies test ./rule.mjs --command "git push --force origin main"
+# {"ok":true,"decision":"deny","policies":[{"name":"no-force-push","decision":"deny",…}]}
+```
+
+Source may be a path, `@path`, `-` for stdin, or omitted to paste interactively. Its own
+options come after the subcommand: `--tool` (default `Bash`), `--command`, `--file`,
+`--event` (default `PreToolUse`), `--expect`. `--json` is a **global** and goes before the
+command; `fp policies test … --json` is a usage error, exit 2. The JSON is
+`{ok, decision, policies[], syntax, expected, met}`, and `decision` is **the strictest any
+registered policy returned** — so it carries the same "which policy denied?" ambiguity as the
+hook (below).
+
+State its limits rather than letting a green line stand in for enforcement:
+
+- **no `--cli` flag.** Every run is one shape; you cannot run the case as Hermes, Codex or
+  Copilot, so it never proves that `terminal` or `powershell` reaches a policy matching `Bash`.
+- **no capability check.** It will report `deny` just as happily for an event the target
+  harness discards. Nothing is marked INERT.
+- **it cannot prove the daemon feeds the policy the same context.** It proves the file
+  parses, registers and decides for the input you typed. That is the whole claim.
+
+So iterate with it — then prove it with the **bundled runner**, which is harness-aware and
+stays the thing you run before reporting a policy done. Substitute `$SKILL_DIR` with the path
+to this skill's own folder — the directory you were told to read this file from:
 
 ```bash
 node "$SKILL_DIR/scripts/test-policy.mjs" \
@@ -611,24 +648,41 @@ Two ways this test can lie to you:
 - **A deny does not prove *your* policy denied.** Every enabled policy sees the event, so
   another one may have fired — a rule matching nothing can hide behind a green suite. Assert
   on text unique to your policy's reason, or test with `enabledPolicies: []`. See
-  `references/traps.md` *Sourcing findings from Failproof AI Cloud*; this happens more often than it sounds.
+  `references/traps.md` §4; this happens more often than it sounds.
 
 Use the `examples[]` from the audit finding as your should-deny cases — they are real
 commands the agent ran, so they prove the policy catches what actually happened.
 
-### Confirm the policy is actually live
+### Confirm the policy is actually live — then hand off
 
 The only reliable check is the one you already did in *Verify it fires*: run the hook and
 look at stdout. Nothing else proves it.
 
-What genuinely stops a policy from running: the filename convention (*Write the file*), a
-load-time throw, `customPoliciesEnabled: false` in the first scope that sets it
-(`references/traps.md` §2 — this used to be a no-op and **now actually disables** convention
-policies), or hooks not being installed for the CLI at all. Verify with:
+What genuinely stops a policy from running on **this machine**: the
+filename convention (*Write the file*), a load-time throw, `customPoliciesEnabled: false` in
+the first scope that sets it (`references/traps.md` §2 — this used to be a no-op and **now
+actually disables** convention policies), or hooks not being installed for the CLI at all.
+Verify with:
 
 ```bash
 failproofai policies --list
 ```
+
+**That is where this skill stops.** The split is clean, and both halves are shipped work:
+
+| Half | The question it answers | Skill |
+|---|---|---|
+| author | *what is the rule, and does it decide correctly?* | this one |
+| deploy | *how does it reach machines, and how do you prove it fired there?* | `failproofai-policy-deploy` |
+
+Everything past a proven local file is the deploy half: minting a version with
+`fp policies publish` (which **deploys nothing** on its own), choosing `enforce` vs
+`observe`, `fp fleet deploy`, rollback, and reading `fp guardrails` to see the rule fire on
+real traffic. Those are shipped commands — if you find yourself about to say deployment is
+"dashboard work" or "not exposed by the CLI", that is wrong, and it tells the reader to stop
+looking for something that exists. Route to **`failproofai-policy-deploy`** rather than
+improvising: `fp fleet deploy --add <policy>` with no `:effect` on the ref defaults to
+**enforce**, not observe, which is not a default to discover by experiment.
 
 ## Enforcing a rules file (CLAUDE.md / AGENTS.md / system prompts)
 
@@ -700,21 +754,24 @@ enforce*), that rule belongs in a fifth list — **enforced on some harnesses** 
 CLIs named. "Enforced" with no harness attached is the claim `ENFORCEMENT_CAPABILITY` was
 written to stop people making.
 
-## Sourcing findings from Failproof AI Cloud
+## Sourcing findings from FailproofAI Cloud
 
-Failproof AI Cloud is the observability half: failproofai enforces inside the loop, the
+FailproofAI Cloud is the observability half: failproofai enforces inside the loop, the
 cloud records what happened across the whole fleet. Full procedure and verified commands
 are in `references/cloud.md` — read it before running anything. The shape:
 
 ### Preflight
 
-`agenteye whoami`. Exit 4 means not logged in, and **you cannot fix that** — login needs a
-code emailed to the user. Ask them to run `agenteye login --email <them>` and stop. Note the
-permissions it prints; they decide what you may do when closing out. Pass `--json` to every command.
+`fp --json whoami`. **It exits 0 either way** — branch on the `.logged_in` field, never on
+the exit code. Logged out it prints `{"logged_in": false, "auth_mode": "none"}`, and **you
+cannot fix that** — login needs a code emailed to the user. Ask them to run
+`fp login --email you@example.com` and stop. Note the permissions it prints; they decide what
+you may do when closing out. Global options go **before** the command: `fp --json whoami`,
+not `fp whoami --json` (exit 2).
 
 ### Ask all three questions
 
-Failproof AI Cloud answers four different things, and they produce different work:
+FailproofAI Cloud answers four different things, and they produce different work:
 
 | Question | Command shape | Produces |
 |---|---|---|
@@ -723,14 +780,14 @@ Failproof AI Cloud answers four different things, and they produce different wor
 | What is **too strict**? | same, outcome in (denied, blocked) | deny-mode rules that should be oversight |
 | What is on the issues board? | `issues list` → branch on `source` | `audit`-born → follow to the finding; `alert` → metric breach, not policy work; `manual` → free text, classify like *Enforcing a rules file* |
 
-`kind: policy` is Failproof AI Cloud's own classification — `improvement` and `failure` findings are
+`kind: policy` is FailproofAI Cloud's own classification — `improvement` and `failure` findings are
 code and instrumentation work, not yours. The issues board is a **human attention queue**,
 not a behaviour log: on a live deployment 0 of 11 issues were policy-actionable, because an
 alert fires on a number (latency, error rate, score) while a policy gates a tool call. Read
 it, classify it, and report what you skipped — do not manufacture enforcement for a metric.
 
-The middle row is the one no local audit can answer. failproofai fails open (`references/traps.md` *Enforcing a rules file*),
-so a policy that throws returns allow and nothing surfaces locally. Failproof AI Cloud records every
+The middle row is the one no local audit can answer. failproofai fails open (`references/traps.md` §3),
+so a policy that throws returns allow and nothing surfaces locally. FailproofAI Cloud records every
 hook outcome, so a failing hook is a query away — and a hook failing hundreds of times is a
 live gap that outranks any new policy you might write. Report it first.
 
@@ -752,8 +809,8 @@ is four lookups, and **skipping them is how a plausible policy that never fires 
 shipped.** Never infer the tool from the issue title.
 
 ```bash
-agenteye --json issues list                       # breach_summary names the session
-agenteye --json events --full --session-id <id>   # the only source of real payloads
+fp --json issues list                       # breach_summary names the session
+fp --json events --full --session-id <id>   # the only source of real payloads
 ```
 
 | Step | Where it comes from | Why it matters |
@@ -782,9 +839,9 @@ Two things that bite while reading payloads:
 ### Author as normal, and test on the real payload
 
 Straight into *The authoring core* — builtins and their params first, then mode, then filename, then test both
-directions. Failproof AI Cloud changes where the work comes from, not how a policy is written.
+directions. FailproofAI Cloud changes where the work comes from, not how a policy is written.
 
-Two calls are worth making first. `agenteye list tools` — a policy matching a tool the fleet
+Two calls are worth making first. `fp --json list tools` — a policy matching a tool the fleet
 never emits is dead on arrival — and `scripts/fleet-tool-coverage.mjs`, because on a real
 fleet only ~11% of the tool surface is builtin-reachable (*Measure builtin coverage*).
 
@@ -797,7 +854,7 @@ actually worked".
 ### Propose the close-out; do not run it
 
 Print the `issues comment-add` and `audits resolve` commands and let the user run them.
-Failproof AI Cloud's confirms **auto-skip on a non-TTY, which is how you run it**, so a wrong id
+FailproofAI Cloud's confirms **auto-skip on a non-TTY, which is how you run it**, so a wrong id
 resolves someone else's finding on a shared board with no prompt — and triage needs
 `audits:write`, which a read-only account lacks. See `references/cloud.md`.
 

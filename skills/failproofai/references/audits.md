@@ -154,23 +154,29 @@ an already-signed-in machine is **refused**, not honoured.
 
 ---
 
-## Half two — cloud audits (`agenteye`, server-side)
+## Half two — cloud audits (`fp`, server-side)
 
 A cloud audit is a stored definition that runs on a server cadence over **sessions already
-delivered to the org**, and emits findings. Verified below against `agenteye` 0.1.13 installed
-here (`agenteye audits --help` and friends), not against the docs, which are still written for
-the never-shipped `fp`. The chain is SKILL.md's, with a run in it: session → audit → **run** →
-finding → issue → policy, branching to an alert where prevention is impossible.
+delivered to the org**, and emits findings. `fp` has shipped (`uv tool install fp-cloud-cli`)
+and is what to resolve **first** — `command -v fp agenteye`. Everything below was checked
+against `fp audits --help` and its subcommands' own help, not against the docs. `agenteye`
+0.1.13 is the legacy package: still installable, still runs audits, and where the two differ
+it is called out below. Notes elsewhere in this repo describing `fp` as unshipped, or
+resolving `agenteye` first, are stale. The chain is SKILL.md's, with a run in it: session →
+audit → **run** → finding → issue → policy, branching to an alert where prevention is
+impossible.
 
 ### Defining and scheduling
 
-`agenteye audits create NAME` — everything but the name has a server default; a bare create
-gives you a **daily, LLM-backed audit over all activity, enabled**, and **queues its first run
+`fp audits create NAME` — everything but the name has a server default; a bare create gives
+you a **daily, LLM-backed audit over all activity, enabled**, and **queues its first run
 immediately**. A name collision is rejected up front with exit 2. The documented "one-time
 release investigation" cadence therefore needs an explicit `--disabled`.
 
 | Knob | Bound / default |
 |---|---|
+| `--file` | full audit JSON to base it on, or `-` for stdin; flags layer on top |
+| `--description` / `--enabled`/`--disabled` | free text; starts on unless you say otherwise |
 | `--schedule-interval-secs` | 3600–604800, default 86400 |
 | `--schedule-anchor` | fixed UTC ISO 8601 slot, default next 09:00 UTC |
 | `--window-mode` | `since_last` (default) or `fixed` |
@@ -185,19 +191,30 @@ move the anchor. `edit` retains unspecified values; `delete` takes findings and 
 **The docs' cadence table recommends "Monthly" for governance review — unreachable**: the
 interval caps at 604800 (7 days), in the docs and in the binary.
 
-**Two documented surfaces do not exist in the shipped binary.** `audits context-show` /
-`context-set` / `context-refresh`, and the `--text` / `--text-file` / `--url` brief options on
-create, appear in `docs/reference/cloud-cli.mdx` and are absent from `agenteye audits --help`
-and `agenteye audits create --help` (grep `text_file` or `context-set` in
-`agenteye_cli/commands/audits_cmds.py` — nothing). On 0.1.13, operator briefs and reference
-URLs are dashboard or HTTP-API work. Do not build a workflow on those flags.
+**Reference context ships, and is the surface people still think is missing.** `audits
+context-show` / `context-set` / `context-refresh`, and the `--text` / `--text-file` / `--url`
+brief options on create, are all present in `fp` and all absent from legacy `agenteye` 0.1.13
+— notes calling them documented-but-unshipped were describing `agenteye`, and are true only
+there. Two things to get right:
+
+- **Attach context on create.** A new enabled audit is due immediately, so `--text`/`--url` in
+  the same request is the only way to be sure the first run has it; a URL the guard refuses
+  fails the whole create rather than leaving a half-made audit.
+- **On `context-set` each half is independent.** `--text ""` clears the brief, `--clear-urls`
+  drops the URL list and its snapshots, and whatever you omit is left alone. Omission used to
+  mean "delete" for URLs but "keep" for the brief, so a routine `--text` edit silently threw
+  away every reference page — if you meet that behaviour you are on an old build.
+
+The brief caps at 8192 characters. URLs are public `https://` only, up to five, refused for
+private, loopback and cloud-metadata addresses, validated on save and fetched in the
+background so a slow site never blocks a run.
 
 ### Running
 
-`agenteye audits run NAME` **queues** — success means queued, not finished. A disabled audit,
-or one with a run in progress, is refused (exit 1) rather than double-queued. Poll
-`agenteye audits runs NAME` (newest first, server returns the 50 most recent; a still-running
-row shows `-` for `took`). Reading findings sooner gives you the previous run's results.
+`fp audits run NAME` **queues** — success means queued, not finished. A disabled audit, or one
+with a run in progress, is refused (exit 1) rather than double-queued. Poll `fp audits runs
+NAME` (newest first, server returns the 50 most recent; a still-running row shows `-` for
+`took`). Reading findings sooner gives you the previous run's results.
 
 **A zero-finding run has four meanings and only one is "healthy":** analysis ran and found
 nothing; model analysis was skipped; it failed; or it is disabled. In the last three the run
@@ -216,7 +233,7 @@ entirely invisible.
 
 A finding is a stable failure mode carried across runs, with severity, kind (failure vs policy
 violation vs improvement), occurrence count, evidence session ids, supporting queries and a
-recommendation. `agenteye audits findings` defaults to `--limit 100` and, with no `--status`,
+recommendation. `fp audits findings` defaults to `--limit 100` and, with no `--status`,
 returns the **live set: open + recurring**.
 
 | Verb | Status after | Suppresses later runs? | Confirms? |
@@ -232,7 +249,7 @@ returns the **live set: open + recurring**.
 `recurring`, `resolved`, `dismissed`, `muted` — **there is no `acknowledged` finding status**. (Issues do have an `acknowledged` state;
 findings do not.)
 Evidence survives dismissal, which is why `--reason` is worth writing. Before deciding, open
-the trace: `agenteye events --session-id <id> --full --all`.
+the trace: `fp events --session-id <id> --full --all`.
 
 ### Issues
 
@@ -245,9 +262,12 @@ response. States are `firing`, `acknowledged`, `resolved`; `source` is `manual`/
 
 Resolving a finding and resolving an issue are different decisions at different times: the
 issue when remediation is deployed and verified, the finding when the failure mode is addressed
-for the audit population. Policy generation from an issue is **dashboard-only** and nothing is
-published or deployed automatically; a "no policy" candidacy result is a real answer meaning
-use an alert, a workflow change, or a human. Route authoring to `failproofai-policy-author`.
+for the audit population. The *generate a policy from this issue* button is dashboard-only,
+and **nothing it drafts is published or deployed automatically**; a "no policy" candidacy
+result is a real answer meaning use an alert, a workflow change, or a human. From a draft
+onward the CLI does carry the whole lane — `fp policies compose` / `test` / `publish`, then
+`fp fleet deploy` — so do not tell anyone the rest is dashboard work. Route authoring to
+`failproofai-policy-author` and the publish-and-deploy half to `failproofai-policy-deploy`.
 
 ### Alerts
 
@@ -257,7 +277,9 @@ Severities `info`/`warning`/`critical`. Five trigger kinds — `metric_threshold
 `--trigger-kind` help lists five). `--eval-interval-secs` is 30–86400, plus `--min-breaches`
 and `--eval-window` (a count of intervals).
 
-**`agenteye alerts test NAME` really sends** to the configured channels. Warn the user before
+**`fp alerts test NAME` really sends** to the configured channels. It confirms first (`--yes`
+skips, and so does `--json`), then reports which channels it dispatched to — but the server
+calls success at dispatch, so a green result is not proof of delivery. Warn the user before
 running it, and test the rule before depending on it for production response.
 
 ### Agent contracts
@@ -267,7 +289,8 @@ whose scope includes that agent uses it, and **every run stores the exact contra
 used**, so later edits never rewrite the basis of earlier findings. Body under 5,000 chars,
 conventionally **Purpose · Outputs · Done when · Cadence · Must not**.
 
-**There are no contract commands in `agenteye` at all** — grep `contracts` over the installed
+**There are still no contract commands in either binary** — neither `fp --help` nor
+`fp audits --help` carries a `contract` entry, grep `contracts` over the installed
 `agenteye_cli` package returns nothing, and the endpoints are absent from
 `docs/reference/http-api.mdx`. The only programmatic route is the API, documented solely in
 `docs/audits/agent-contracts.mdx`:
@@ -294,12 +317,29 @@ analysis what conclusion to reach or which evidence to examine.
 | Mistake | Reality |
 |---|---|
 | "Run `failproofai audit` to see my org's findings" | it never touches the cloud; it scans this disk |
-| "`agenteye audits` will show my local audit result" | it never sees `~/.failproofai/audit/` |
+| "`fp audits` will show my local audit result" | it never sees `~/.failproofai/audit/` |
 | "Scheduling is scheduling" | local = `audit.auto` + this box's daemon; cloud = a server anchor |
 | "Findings are findings" | local emits policy/detector *hit counts*; cloud emits findings with ids and triage state |
 | "`--since` narrows the scan" | local CLI takes no arguments; cloud uses `--lookback-window-secs` |
-| Env prefix | local is `FAILPROOFAI_*`; the cloud CLI is `AGENTEYE_*` |
-| Flag placement | `agenteye` globals come **before** the command: `agenteye --json audits runs <name>` |
+| Env prefix | local is `FAILPROOFAI_*`; `fp` is `FP_*` — and `fp` also honours `FAILPROOFAI_HOME`, so the two namespaces are **not** cleanly separated. Only legacy `agenteye` reads `AGENTEYE_*` |
+| Flag placement | `fp` globals come **before** the command: `fp --json audits runs <name>`; after it, exit 2 |
+
+**The env prefix follows the binary, and the infix is dropped.** `fp` reads `FP_HOME`,
+`FP_JSON`, `FP_TOKEN`, `FP_API_KEY`, `FP_ORG`, `FP_DASHBOARD_URL`, `FP_INSECURE`,
+`FP_ANALYTICS_DISABLED` and `FP_CLI_DEV` — plus `FAILPROOFAI_HOME`, which is exactly why the
+old "local is `FAILPROOFAI_*`, cloud is `AGENTEYE_*`" split no longer holds. It reads **no**
+`AGENTEYE_*` variable at all. Do not derive the names mechanically: a straight `AGENTEYE_` →
+`FP_` substitution gives you `FP_CLI_TOKEN` and `FP_CLI_JSON`, which nothing reads. It is
+`FP_TOKEN` and `FP_JSON`.
+
+What does **not** move with the binary is the wire and the spool, and `fp` still uses all of
+it: the `X-AgentEye-Org` / `X-AgentEye-Client` / `X-AgentEye-Signature` headers, the
+`ae_session` cookie, the OpenAPI title "AgentEye API", and the local daemon's `AGENTEYE_HOME`
+and `~/.agenteye/events` spool. Those are literals — renaming one breaks the request, not the
+branding. `AGENTEYE_KEY` (collector ingest) and `AGENTEYE_API_KEY` (dashboard admin) are two
+further credentials again; `FP_API_KEY` was named deliberately not to collide with either, so
+never reuse one in place of another. The cloud CLI's own session now lives at
+`~/.failproofai/fpcli/cli-auth.json` (mode 0600) — inside the local home, not a second tree.
 
 Unverified here: cloud **run internals** — retry window, capacity behaviour, the deterministic
 PII scan, failure-email fallback — come from `docs/audits/run.mdx` and could not be checked

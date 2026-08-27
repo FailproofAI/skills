@@ -1,9 +1,11 @@
 # Policies from the operator's side
 
-Enabling, installing, packaging and deploying. Everything about policy *source* — the JS API,
-`match`, `allow`/`instruct`/`deny`, testing a rule, publishing a version — belongs to
-**`failproofai-policy-author`**. Stay here for what turns a policy on and what makes it stop
-running. Anchors are grep targets in the `failproofai` package.
+Enabling, installing, packaging, and what makes a policy stop running — on **this machine**.
+Everything about policy *source* — the JS API, `match`, `allow`/`instruct`/`deny`, testing a
+rule — belongs to **`failproofai-policy-author`**. Publishing a version and pushing it to
+machines belongs to **`failproofai-policy-deploy`**; stay here for where a cloud-managed
+policy lands on disk and how it behaves once it has. Anchors are grep targets in the
+`failproofai` package.
 
 ## Five sources, one registry
 
@@ -16,7 +18,7 @@ told apart only by the prefix the handler applies (`handler.ts`, grep `const pre
 | Explicit custom | `custom/<name>` | `customPoliciesPaths` |
 | Convention | `.failproofai-project/…`, `.failproofai-user/…` | nothing — presence is the switch |
 | Pack | `pack/<id>@<version>/<name>` | `installed.json` `enabled` list |
-| Cloud-managed | `cloud/<id>@<version>/<name>` | the dashboard, not this machine |
+| Cloud-managed | `cloud/<id>@<version>/<name>` | a fleet deploy, not this machine |
 
 `failproofai policies` prints all five, including a `Pack — <id>@<version>` block per pack
 and a read-only `Cloud-managed — deployment <n>` block (`manager.ts`, grep `Cloud-managed —
@@ -241,11 +243,57 @@ rather than trusting the daemon that wrote them.
 `--disconnect` removes `active.json` as well as the credential. **Deleting
 `credentials.json` by hand does not** — that stops policy refreshing while every artifact
 already on disk keeps enforcing indefinitely, with `--status` reporting the machine as
-unconnected (grep `clearActiveCloudManagedPolicies`). Deployment routes are root-only
-administrative endpoints and are **not exposed by the cloud CLI**: assigning, promoting and
-rolling back are dashboard work.
+unconnected (grep `clearActiveCloudManagedPolicies`).
+
+**What lands here is CLI-drivable.** The lane is `fp policies` → `fp fleet` → `fp
+guardrails`: compose, test, publish, deploy, then watch what enforcement did. Any note in
+this repo saying assignment, promotion or rollback is "dashboard work" or "not exposed by the
+cloud CLI" is stale, and believing it stops an agent looking for commands that ship.
+**`failproofai-policy-deploy` owns that lane in depth** — go there for the full grammar. Three
+facts belong on this side of the boundary, because they decide what a machine ends up
+enforcing:
+
+- **Publishing deploys nothing.** `fp policies publish <policy-id> <source>` mints a new
+  version and leaves it unused; no machine picks it up until an `fp fleet deploy` names it.
+- **`disable` stops enforcement; `delete` does not.** `fp policies disable <policy-id>`
+  removes the policy from every deployment carrying it. `delete` archives it — already-
+  deployed artifacts on disk keep running. To actually stop a policy, disable it or deploy it
+  away, then confirm with `fp fleet diff`.
+- **Every `policies` / `fleet` / `guardrails` subcommand except `policies test` exits 2 under
+  an API key.** They need a user session. CI cannot drive a deploy; a human or a session token
+  has to.
+
+`fp policies test` is the exception and the only piece of the lane that is genuinely local —
+no server, no fleet, no auth, just `node` on PATH. It resolves `import { deny } from
+"failproofai"` with nothing installed in the working directory, because the CLI shims the
+module itself:
+
+```bash
+fp policies test ./rule.mjs --command "git push --force origin main"
+# {"ok":true,"decision":"deny","policies":[{"name":"no-force-push","decision":"deny",...}]}
+```
+
+State its limit honestly: it proves the policy parses, registers and decides for the input
+you gave it. It cannot prove the daemon feeds it the same context.
 
 ## Observe, enforce, roll back
+
+Effects are exactly two, `enforce` and `observe`, set per policy per machine on the deploy
+ref — `id`, `id@version`, `id:effect`, `id@version:effect`:
+
+```bash
+fp fleet deploy <machine-id> --add no-force-push:observe
+fp fleet deploy <machine-id> --add no-force-push:enforce
+fp fleet rollback <machine-id> 3
+```
+
+**A bare `--add` on a policy the machine does not already run enforces it.** There is no
+observe-by-default anywhere in this system; write the effect. One ref per flag — they are
+**not** comma-split — and `--set` replaces the whole set and cannot be combined with
+`--add`/`--remove`. Read the JSON field, not the exit code: a no-op exits 0 with
+`applied: false` and a declined prompt exits 0 with `cancelled: true`. `fp fleet diff` is the
+only surface that shows intent against delivery, and the gap is the point — a machine that
+has not collected its latest deployment is not enforcing what the fleet says it is.
 
 `observe` runs the policy for real under the same 10s timeout, records what it *would* have
 decided, then returns `allow` (grep `observeOnly`). The record lands on the hook-activity row
@@ -260,8 +308,11 @@ reconciler refuses any desired state below the highest the *server* has offered 
 session (`crates/failproofaid/src/cloud_policies.rs`, grep `deployment rollback from`). It
 anchors server-side on purpose: anchoring on local `active.json` made that file an
 attacker-controlled permanent denial of service — one write with a high number and every real
-deployment is refused forever. Roll back the specific version rather than pausing; a pause
-widens exposure for every local policy in scope and misses cloud-managed ones anyway.
+deployment is refused forever. `fp fleet rollback <machine-id> <generation>` is the same rule
+from the other end: it mints a **new** generation carrying the old set rather than rewinding
+the counter, and a generation naming a policy since disabled or deleted cannot be reinstated
+at all. Roll back the specific version rather than pausing; a pause widens exposure for every
+local policy in scope and misses cloud-managed ones anyway.
 
 ## Fail-closed: two different mechanisms
 
@@ -299,6 +350,10 @@ denies every `failproofai` invocation from a tool call, unconditionally — a hu
 terminal. Do not retry the blocked action: fail-closed means the system could not establish it
 was safe.
 
-Finally, the `fp sessions` / `fp events` verification steps in the deploy and fleet docs are
-**unverified** — that binary's source is not in this repo and the shipped artifact is
-`agenteye`. Resolve with `command -v agenteye fp` before quoting them.
+Finally, on the binary: `fp` has shipped (`uv tool install fp-cloud-cli`) and is what to
+resolve **first** — `command -v fp agenteye`. Notes in this repo putting `agenteye` first, or
+calling `fp` unshipped, are stale. `agenteye` is the legacy binary and carries no `policies`,
+`fleet` or `guardrails` command at all, so where only it answers the cloud lane above really
+is unavailable — that is an upgrade, not a missing flag. To confirm from the cloud side that a
+deploy changed behaviour, `fp guardrails summary` is the direct answer; `fp sessions` and
+`fp events` are the indirect one.

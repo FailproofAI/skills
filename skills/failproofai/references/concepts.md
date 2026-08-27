@@ -14,20 +14,20 @@ have no local implementation at all**, so an offline machine runs only part of t
 | Session | one agent task or run | a transcript on disk, browsable | one row per run |
 | Event | one recorded action in a session | a hook-activity row | an ingested event |
 | Trace | the ordered, nested session view | — | dashboard only |
-| Evaluation | one scored judgement of a run | — | `agenteye evals` |
-| Audit | a review of a session population | `failproofai audit` | `agenteye audits` |
+| Evaluation | one scored judgement of a run | — | `fp evals` |
+| Audit | a review of a session population | `failproofai audit` | `fp audits` |
 | Finding | evidence-backed failure an audit found | a report card, no id | a triageable record |
-| Issue | the durable response record | — | `agenteye issues` |
-| Alert | a rule that detects recurrence | — | `agenteye alerts` |
-| Policy | a rule evaluated during activity | 39 builtins + yours | published versions |
-| Deployment | a versioned rollout to machines | `active.json` | dashboard only |
+| Issue | the durable response record | — | `fp issues` |
+| Alert | a rule that detects recurrence | — | `fp alerts` |
+| Policy | a rule evaluated during activity | 39 builtins + yours | `fp policies` — published versions |
+| Deployment | a versioned rollout to machines | `active.json` | `fp fleet deploy` |
 
 ### Session
 
 Locally a session is a transcript file grouped **by project folder** (`app/project/`,
 grep `getCachedSessionFiles`); in the cloud it is grouped **by agent and environment**.
 Same word, two axes. A cloud session can involve **more than one agent**: `--agent-id`
-matches if *any* agent in it is the one you named, not just the root. And `agenteye
+matches if *any* agent in it is the one you named, not just the root. And `fp
 sessions` needs **`evaluations:read`, not a sessions permission**, because its `status`
 column is the session's latest *evaluation* outcome — a session that was never evaluated
 shows blank, which is an unscored run, not a failed one.
@@ -60,10 +60,10 @@ content); `--full` hits a heavier endpoint, so bound it with one `--session-id`.
 
 ### Trace and Evaluation
 
-There is **no `trace` command on either binary** — none of `agenteye`'s 19 commands is
-one. The trace is the dashboard's session view; the CLI approximation is `agenteye events
+There is **no `trace` command on either binary** — none of `fp`'s 23 commands is
+one. The trace is the dashboard's session view; the CLI approximation is `fp events
 --session-id <id>`, which gives order but not nesting. An evaluation is one scored
-judgement of a run: `agenteye evals --score KEY:MIN..MAX` filters by range (either bound
+judgement of a run: `fp evals --score KEY:MIN..MAX` filters by range (either bound
 optional, repeatable, ANDed) and `--aggregate` rolls the set into per-metric stats, worst
 average first. Nothing local produces evaluations.
 
@@ -103,7 +103,7 @@ you meant to hide keeps surfacing.
 ### Issue
 
 The docs say Issue. **The API, the CLI help and the path arguments all say incident** —
-`agenteye issues show` takes `INCIDENT_ID`, and a missing one exits 6. One object, two
+`fp issues show` takes `INCIDENT_ID`, and a missing one exits 6. One object, two
 names; grep for either.
 
 | Facet | Values |
@@ -113,7 +113,7 @@ names; grep for either.
 | link back | `source_finding_id` (JSON only) |
 | severity | `info`, `warning`, `critical`; inherited when opened from an alert |
 
-**The Finding → Issue hop has no CLI command.** `agenteye issues open` accepts
+**The Finding → Issue hop has no CLI command.** `fp issues open` accepts
 `--alert-id` and nothing else — there is no `--finding-id` — yet `source` includes
 `audit` and every issue carries `source_finding_id`. The dashboard makes that hop and the
 CLI cannot; do not hunt for the flag. The two also have **separate triage vocabularies
@@ -127,19 +127,41 @@ A rule that fires when a known condition returns. Trigger kinds: `metric_thresho
 `custom_sql`, `evaluation_score`, `eval_compound`, `per_event`. Severity `info` /
 `warning` / `critical`. Cadence is `--eval-interval-secs` (30–86400) plus
 `--min-breaches` within `--eval-window` intervals. Channels: email / Slack / webhook.
-`agenteye alerts test <name>` **really sends** to those channels — it is not a dry run.
+`fp alerts test <name>` **really sends** to those channels — it is not a dry run.
 
 ### Policy and Deployment
 
-A policy is evaluated *during* activity; every other noun in the loop is post-hoc. A
-deployment is a monotonically increasing integer naming one immutable set of policy
-versions, held in two files under `cloud-policies/` (`fp-home.ts`, grep
-`cloudPoliciesDir`): `desired-state.json`, what the server wants this machine to run, and
-`active.json`, what is actually live plus the deployment number. That pair is the
-machine-side of the dashboard's **assigned vs reported** view. They diverge when the
-daemon never pulled, or pulled and *refused* the manifest — an unknown `effect` value or
-a SHA256 mismatch fails the whole deployment rather than guess (grep
-`failed integrity verification`).
+A policy is evaluated *during* activity; every other noun in the loop is post-hoc. The
+cloud side of it runs its own five-stage lifecycle, with six nouns that
+`docs/start/concepts.mdx` never defines:
+
+    compose  →  test  →  publish  →  fleet deploy  →  guardrails
+    draft it   prove it decides   mint a version   put it on machines   see what it did
+
+| Noun | What it is | Command |
+|---|---|---|
+| **Policy version** | one immutable snapshot of a policy's source; publishing mints a new one and **never edits in place** | `fp policies publish` |
+| **Deployment** | one applied change to the set a machine runs, numbered monotonically | `fp fleet deploy` |
+| **Effect** | `enforce` or `observe`, per policy per machine — exactly those two words, in the ref grammar `id@v:effect` | `fp fleet deploy --add` |
+| **Carrier** | a machine currently running some version of a policy; `--json` returns `carriers`, machine id → live version, so you can see what a publish left behind | `fp policies publish --json` |
+| **Guardrail** | a policy in its deployed, deciding role — evaluated/blocked totals and per-policy outcomes over a window | `fp guardrails summary` \| `timeline` |
+| **Drift** | intent vs delivery: a machine told to run version N that last pulled M. `--json` computes `drifted` for you | `fp fleet diff` |
+
+`failproofai-policy-deploy` owns the depth on all six — the ref grammar, the
+enforce-by-default trap on a bare `--add`, the generation guard, rollback. Two things to
+carry out of here: **publishing deploys nothing** (a new version sits unused until a
+`fleet deploy` names it), and **every `policies`, `fleet` and `guardrails` subcommand
+except `policies test` exits 2 under an API key** — the lifecycle is session-authenticated
+only, so CI can lint a policy and cannot roll one out.
+
+Machine-side, that deployment number is a monotonically increasing integer naming one
+immutable set of policy versions, held in two files under `cloud-policies/` (`fp-home.ts`,
+grep `cloudPoliciesDir`): `desired-state.json`, what the server wants this machine to run,
+and `active.json`, what is actually live plus the deployment number. That pair is the
+machine's end of `fp fleet diff` — the dashboard's **assigned vs reported** view, and the
+CLI's `intended` / `delivered` / `drifted`. They diverge when the daemon never pulled, or
+pulled and *refused* the manifest — an unknown `effect` value or a SHA256 mismatch fails
+the whole deployment rather than guess (grep `failed integrity verification`).
 
 `config --disconnect` removes `active.json` only; the content-addressed artifacts stay,
 hash-verified and inert, so a reconnect is cheap and offline-safe. That removal is
@@ -153,12 +175,18 @@ being governed indefinitely, with `--status` reporting them unconnected.
 
 | Hop | How it is made |
 |---|---|
-| Session → Audit | server-side schedule, or `agenteye audits run` — **async**, poll `audits runs` |
+| Session → Audit | server-side schedule, or `fp audits run` — **async**, poll `audits runs` |
 | Audit → Finding | automatic, deduplicated across runs |
 | Finding → Issue | **dashboard only** — no CLI flag exists |
 | Finding → Policy | `failproofai-policy-author`, which reads the local audit cache |
-| Policy → Deployment | **dashboard only** — deployment routes are root-only |
+| Policy → Deployment | `fp policies publish`, then `fp fleet deploy` — publishing alone puts nothing on a machine |
 | Recurrence → Alert → Issue | `alerts create`, then `issues open --alert-id` |
+
+**Finding → Issue is the only hop with no command behind it.** Deployment used to be a
+second one and is not any more: `fp policies publish|enable|disable|delete` and `fp fleet
+deploy|diff|history|rollback` all ship. Any text telling you a rollout, a promotion or a
+rollback is dashboard work is stale, and following it stops you looking for a command that
+exists.
 
 Alerts sit across the loop's output rather than inside it, watching for a condition to
 return after you thought you closed it — and an alert can open an issue directly, which
@@ -178,7 +206,9 @@ observation-only: the harness discards the verdict. `PreToolUse` is the only eve
 blocks across all twelve. Three more things that bite:
 
 - **Absent `effect` means enforce**, deliberately: a manifest written before observe mode
-  existed must not silently downgrade a machine to observation.
+  existed must not silently downgrade a machine to observation. That default reaches all
+  the way up to the CLI — `fp fleet deploy <machine> --add <id>` with no `:effect`
+  **enforces**. Write `<id>:observe` to trial one.
 - **There is no observe mode for a builtin, a `--custom` policy, or a convention
   policy.** Only cloud-managed and pack layers carry `effect` (`handler.ts`, grep
   `observeOnly`). A convention policy enforces the moment it loads. To trial one, deploy
@@ -266,24 +296,46 @@ then names the tag it chose. By default you get the pack's own defaults — what
 marked safe to switch on unattended — not everything it contains; widen with
 `--category a,b`, `--only a,b`, or `--all`. Re-adding at a newer version keeps what you
 chose rather than switching the rest back on. `FAILPROOFAI_NO_DOWNLOAD=1` refuses to
-fetch while already-installed packs keep enforcing. `--only=` and `--category=` are two
-of the only three places in the product that accept the `--flag=value` form.
+fetch while already-installed packs keep enforcing. **`--only` and `--category` do not
+accept the equals form** — space-separate the value, exactly as written above. The
+`--flag=value` form is accepted in exactly four places: `--cli=`, `--effect=`, `--out=`
+and `--email=`. Elsewhere the hand-rolled parsers compare whole tokens, so `--since=6m`
+is rejected as an unexpected argument carrying no value at all.
 
 ## Two halves, and two finished states
 
-One product — FailproofAI — with a local half and **Failproof AI Cloud** (the service
-formerly called AgentEye; the name survives only in env vars, headers and image paths, which
-are literals and must not be modernised).
+One product — FailproofAI — with a local half and **FailproofAI Cloud** (the service
+formerly called AgentEye). Two rules about the old name, and they pull opposite ways:
+
+- **Wire and infrastructure literals keep it, permanently.** `X-AgentEye-Org`,
+  `X-AgentEye-Client`, `X-AgentEye-Signature`, the `ae_session` cookie, the OpenAPI title
+  "AgentEye API", `ghcr.io/agenteye-enterprise/*`, the k8s namespace `agenteye`, the
+  ClickHouse tables `agenteye.events` / `agenteye.agent_sessions`, and the local daemon's
+  own `AGENTEYE_HOME` with its `~/.agenteye/events` spool — the daemon still watches that
+  path. `fp` still sends every one of the wire values. Renaming any of them breaks
+  something.
+- **Environment variables are not in that set — the prefix follows the binary.** `fp`
+  reads `FP_HOME`, `FP_JSON`, `FP_TOKEN`, `FP_API_KEY`, `FP_ORG`, `FP_DASHBOARD_URL`,
+  `FP_INSECURE` (plus `FAILPROOFAI_HOME`) and **zero** `AGENTEYE_*` variables; legacy
+  `agenteye` reads `AGENTEYE_HOME`, `AGENTEYE_CLI_TOKEN`, `AGENTEYE_CLI_JSON`. Note the
+  dropped infix — it is `FP_TOKEN` and `FP_JSON`, never `FP_CLI_TOKEN`, so a mechanical
+  `AGENTEYE_` → `FP_` substitution invents names nothing reads. `AGENTEYE_KEY` (collector
+  ingest) and `AGENTEYE_API_KEY` (dashboard admin) are separate credentials `fp` does not
+  read; `FP_API_KEY` was named not to collide with them, so never reuse either. Full table
+  in `references/cloud.md`.
 
 Local-only and cloud-connected are both complete. Local-only gives up the four nouns with
 no local column — Trace, Evaluation, Issue, Alert — plus finding triage (local findings
-have no id) and fleet Deployment (`active.json` is only ever written by a daemon pulling
-from a server). It keeps the whole enforcement path: 39 builtins, packs, convention
-policies, hooks across 12 harnesses, and `failproofai audit` over local history.
+have no id) and the whole publish → `fleet deploy` → guardrails lifecycle (`active.json`
+is only ever written by a daemon pulling from a server). It keeps the whole enforcement
+path: 39 builtins, packs, convention policies, hooks across 12 harnesses, and
+`failproofai audit` over local history.
 
 The npm package ships **two** binaries, `failproofai` and `failproofaid`
 (`package.json`, grep `"bin"`), on `node >=20.9.0`. `failproofaid` is a shim; the daemon
 it launches is Linux/macOS only, so on Windows every cloud noun above stays unreachable
 even after a successful `--connect`. Versions in this checkout: `failproofai`
 1.0.2-beta.0 — a **prerelease**; what the `latest` dist-tag gives a fresh
-`npm i -g failproofai` is UNVERIFIED — and `agenteye` 0.1.13.
+`npm i -g failproofai` is UNVERIFIED — and the cloud CLI `fp` 0.0.1b1, distribution
+`fp-cloud-cli`, module `fp_cli`. Legacy `agenteye` 0.1.13 is a separate package that still
+installs alongside it and has no `policies`, `fleet`, `guardrails` or `usage`.

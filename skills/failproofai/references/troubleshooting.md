@@ -57,7 +57,7 @@ ingestion.
 ```bash
 grep -A6 '"collector"' ~/.failproofai/config.json     # sessions / hooks / environment
 failproofai flush --wait --timeout 120
-agenteye --json events --since 24h --limit 20         # global flags BEFORE the subcommand
+fp --json events --since 24h --limit 20               # global flags BEFORE the command
 ```
 
 ## The machine is not receiving policies
@@ -299,7 +299,165 @@ permanently empty dashboard, which is the more dangerous direction. Both halves 
 before anything is written and only what verified is written, so a partial success is normal
 and reported per-half.
 
+## The wrong CLI answered
+
+Three binaries can sit on `PATH` at once and two of them answer to cloud-shaped commands.
+`failproofai` is local enforcement (npm, Node >= 20.9) and is what almost all of this file
+is about. `fp` is the cloud control plane — dist `fp-cloud-cli`, installed with `uv tool
+install fp-cloud-cli`. `agenteye` is the **legacy** cloud CLI: still installable, still
+working for what it has, but with no `policies`, `fleet`, `guardrails` or `usage` at all. A
+script that reaches for `agenteye` on a machine that also has `fp` gets "no such command"
+for every enforcement surface and reads it as a missing feature rather than the wrong
+binary.
+
+```bash
+command -v fp agenteye     # resolve once; prefer fp, which is listed first
+fp version
+```
+
+Never write `uv tool install fp-cli`: `fp_cli` is the module name, the distribution is
+`fp-cloud-cli`. Environment follows the binary that reads it — `FP_*` for `fp`,
+`AGENTEYE_*` for the legacy CLI, `FAILPROOFAI_*` for the local one — with two exceptions
+worth knowing before you export anything. `AGENTEYE_HOME` is **not** a cloud setting; it is
+the local daemon's spool path (`~/.agenteye/events`) and the daemon still watches it.
+`FAILPROOFAI_HOME` *is* read by both, because `fp` keeps its session at
+`~/.failproofai/fpcli/cli-auth.json` — inside the local home — so a stale export moves the
+cloud session file too.
+
+## `fp <command> --json` exits 2 with "No such option: --json"
+
+Global options go **before** the command; a command's own options go after it. Getting it
+backwards is a usage error with its own exit code, and the CLI says so in the hint:
+
+```
+$ fp sessions --json
+{
+  "error": "No such option: --json (Possible options: --since, --to)",
+  "exit_code": 2,
+  "hint": "global options go before the command, e.g. 'fp --json <command>'"
+}
+```
+
+The trap is the first line, which names the *command's* options and reads like `--json` was
+removed from the product. It was not; it was misplaced. The globals are exactly `--json
+--base-url --org --token --api-key --insecure/--secure --timeout --quiet --no-color`, and
+they precede the command even when a subcommand has its own flags after it:
+
+```bash
+fp --json sessions --since 24h
+fp --json keys create ci-bot --permission-set read-only
+```
+
+## `whoami` looks signed in but every other command fails
+
+`fp whoami` **exits 0 whether or not you are signed in.** Logged out it prints a well-formed
+result and returns success:
+
+```bash
+fp --json whoami
+```
+```json
+{ "logged_in": false, "auth_mode": "none" }
+```
+
+So `fp whoami >/dev/null && …` proves nothing, and a guard written as "exit 4 means not
+signed in" is watching for a code this command never returns. Branch on the **field**:
+
+```bash
+fp --json whoami | grep -q '"logged_in": *true' || fp login
+```
+
+Because the check passes and each later command then fails on its own auth error, this
+presents as "everything broke at once" rather than "I am logged out".
+
+## `policies`, `fleet` or `guardrails` exit 2 in CI
+
+They are **refused under an API key**, deliberately. An API key authenticates the versioned
+read API; cloud-managed policy is an operator surface that is not on it:
+
+```
+$ FP_API_KEY=… fp --json policies list
+{
+  "error": "`fp policies` does not work with an API key — cloud-managed policies are an operator surface and are not exposed on the versioned API that an API key authenticates against.",
+  "exit_code": 2,
+  "hint": "drop --api-key / FP_API_KEY and sign in with fp login"
+}
+```
+
+`fp --help` states the same rule in one line: under `--api-key` / `FP_API_KEY`, *login,
+orgs, agent, policies, fleet and guardrails* all exit 2. Sessions are interactive, so **CI
+cannot publish, deploy, promote or roll back a policy.** Do not build a pipeline around it,
+and do not read the exit 2 as a revoked key.
+
+The one exception is the one CI actually wants, and it needs no credential at all:
+
+```bash
+fp policies test ./rule.mjs --command "git push --force origin main" --expect deny
+```
+
+`policies test` is local: no server, no fleet, no auth. It needs only `node` on `PATH`, and
+the CLI shims the module itself, so a bare `import { deny } from "failproofai"` resolves
+with nothing installed in the working directory. `--expect allow|deny|instruct` exits 1 when
+the decision does not match, which is the whole CI gate. Under `--json` it returns `{ok,
+decision, policies:[{name, description, decision, reason}], syntax, expected, met}` and the
+overall `decision` is the **strictest** any registered policy returned:
+
+```json
+{"ok":true,"decision":"deny","policies":[{"name":"no-force-push","decision":"deny","reason":"…"}]}
+```
+
+State its limit honestly rather than selling it as a rehearsal: it proves the policy parses,
+registers and decides for the input you gave it. It cannot prove the daemon feeds it the
+same context.
+
+## Published a policy and nothing changed on the machine
+
+**Publishing deploys nothing.** `fp policies publish <policy_id> [source]` mints a *new
+version* — it never edits one in place — and that version sits unused until something
+assigns it. The assignment is a separate command:
+
+```bash
+fp --json policies publish <policy-id> ./rule.mjs   # new version; nothing runs it yet
+fp --json fleet list                                # which machine, on which version
+fp fleet deploy <machine-id> --add <policy-id>@<version>:observe
+```
+
+`policies publish --json` answers the question itself: alongside the created version it
+returns `carriers`, a machine id → currently-running version map. If the version you just
+minted appears against no carrier, nothing is enforcing it. The lifecycle is compose → test
+→ publish → **fleet deploy** → guardrails, and only the last two change what a machine does.
+
+Two silent traps at the deploy step:
+
+- **A bare `--add` on a policy the machine does not already run enforces it.** The ref
+  grammar is `id`, `id@version`, `id:effect` or `id@version:effect`, and the effects are
+  exactly `enforce` and `observe`. Omit the effect on a new assignment and you get
+  `enforce` — a live block on real tool calls. Write `:observe` when you mean to watch
+  first. On a policy the machine *already* runs, a bare `--add` keeps the pinned version
+  rather than upgrading it; pass `id@version` to move it.
+- **`--set` replaces the whole set wholesale** and cannot be combined with `--add` /
+  `--remove`. Refs are **not** comma-split — repeat the flag (`--set a --set b`).
+
+Neither a no-op nor a refusal is an error, so never read exit 0 as "it deployed": a deploy
+that changes nothing exits **0** with `applied: false`, and a declined confirmation exits
+**0** with `cancelled: true`. The write is a full replace with no server-side lock, so the
+CLI records the generation it read and refuses anything that is not exactly one higher —
+that is exit **1**, it means somebody else deployed in between, and a replace does not
+merge. Re-read the current set before retrying rather than retrying blind. `--create` will
+happily mint a machine record from a typo'd id, so check `fleet list` first.
+
+When enforcement must actually stop: **`disable` stops it, `delete` does not.** Deleting a
+policy archives it; whatever is already deployed keeps running.
+
+One more permission trap at the other end of that lifecycle: `fp policies compose
+"<prompt>"` asks the cloud assistant to draft a policy, and it is gated on **`policies:write`,
+not `agent:use`** — the route is wrapped in the policies permission despite the name. A role
+holding only `agent:use` is refused; one holding `policies:write` and no `agent:use` works.
+It is session-only like the rest of the family.
+
 ## Commands that lie to you
+
+Local `failproofai` unless the row names `fp`.
 
 | Command | What it reports | What is actually true |
 |---|---|---|
@@ -310,7 +468,8 @@ and reported per-half.
 | `failproofai audit` | exit 75 | `EX_TEMPFAIL` — another audit holds the lock; not a failure |
 | `harness add-path` | `configured` | the daemon may refuse the path at startup |
 | `pack list` | exit 1, output on stderr | one installed pack merely failed to load |
-| `agenteye whoami` | exit 0 | prints "not signed in" and still exits 0 |
+| `fp whoami` | exit 0 | exits 0 **either way** — read `.logged_in`, never the exit code |
+| `fp policies publish` | a new version | deploys nothing; the machines keep running the old one |
 | any subcommand | stdout | on a non-zero exit **every** line goes to stderr instead |
 
 **Silently accepted typos.** The `config` branch validates *no* unknown flags at all — the
@@ -319,8 +478,13 @@ top-level guard sits after it and never runs. So `--no-transcript`, `--notranscr
 whatever was pasted into a terminal) ship to the cloud. Confirm the setting with
 `config --status`, never with the exit code.
 
-- **No `--flag=value` anywhere** except `pack --only=` / `--category=` and `audit --email=`.
-  Every parser is hand-rolled: `--since=6m`, `--scope=user`, `--cli=claude` all fail.
+- **No `--flag=value` anywhere in `failproofai`** except exactly four flags: `--cli=`,
+  `--out=`, `--effect=` and `audit --email=`. Every other parser is hand-rolled around
+  whole-token comparison, so `--since=6m`, `--scope=user`, `--only=git`, `--category=git`
+  all fail with "Unexpected argument". `--only` and `--category` sit beside `--cli` in the
+  same `pack add` line and still do **not** take the equals form. This rule is **local
+  only** — `fp` parses `--timeout=5` and every other valued option in the equals form
+  happily, so do not carry the habit either way between the two binaries.
 - `--cli` consumes values greedily and stops at the first token that is not a recognised CLI
   name, so `--cli bogus` reports *"Missing value(s) for --cli"* — while
   `--cli claude block-sudo` correctly reads `block-sudo` as a policy, so a **typo'd CLI name

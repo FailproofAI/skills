@@ -1,37 +1,57 @@
-# Sourcing policy work from Failproof AI Cloud
+# Sourcing policy work from FailproofAI Cloud
 
-[Failproof AI Cloud](https://app.befailproof.ai) is the observability side of the same story: failproofai
-enforces inside the agent loop, Failproof AI Cloud records what happened across the fleet. Where the
-local `failproofai audit` reads one machine's transcripts, Failproof AI Cloud holds every session from
+[FailproofAI Cloud](https://app.befailproof.ai) is the observability side of the same story: failproofai
+enforces inside the agent loop, FailproofAI Cloud records what happened across the fleet. Where the
+local `failproofai audit` reads one machine's transcripts, FailproofAI Cloud holds every session from
 every agent in an org — so it sees things a local audit structurally cannot.
 
-The commands here were verified against a live Failproof AI Cloud deployment. Figures quoted below are
+The commands here were verified against a live FailproofAI Cloud deployment. Figures quoted below are
 illustrative of the shapes you will see, not from any particular org.
 
 ## Preflight
 
 ```bash
-agenteye whoami            # exit 4 = not logged in; you cannot fix this — see below
+fp --json whoami
 ```
 
-If not logged in, **stop and ask the user to run `agenteye login --email <them>`** — it needs
-a one-time code emailed to them, so you cannot complete it. Note the permissions `whoami`
-prints; they decide what you may do at the end (see "Closing the loop").
+**`whoami` does not error when you are signed out — it exits 0 either way.** Branch on the
+`.logged_in` field, never on the exit code; signed out it prints
+`{"logged_in": false, "auth_mode": "none"}`. Any check of the form "exit 4 means not logged
+in" silently treats every signed-out run as a success and then fails on the next command
+with something unrelated.
 
-Add `--json` to **every** command — it prints machine-readable output and nothing else.
+```bash
+fp --json whoami | jq -e '.logged_in' >/dev/null || echo "not signed in — stop here"
+```
+
+If not logged in, **stop and ask the user to run `fp login --email you@example.com`** — it
+needs a one-time code emailed to them, so you cannot complete it. Note the permissions
+`whoami` prints; they decide what you may do at the end (see "Closing the loop").
+
+Add `--json` to **every** command — it prints machine-readable output and nothing else. It is
+a **global** option, so it goes **before** the command, not after it:
+
+| Form | Result |
+|---|---|
+| `fp --json audits findings` | correct |
+| `fp audits findings --json` | usage error, **exit 2** |
+
+The same rule holds for `--base-url`, `--org`, `--token`, `--api-key`, `--insecure`/`--secure`,
+`--timeout`, `--quiet` and `--no-color`. A command's own options still come after it —
+`fp --json audits findings --limit 100 --show-id`.
 
 ## Four sources of policy work
 
-Failproof AI Cloud answers four different questions. Check all four; they produce different work — and
+FailproofAI Cloud answers four different questions. Check all four; they produce different work — and
 two of them produce no policy at all, which is a result worth reporting rather than a dead end.
 
 ### 1. Findings already classified as policy-shaped
 
-Failproof AI Cloud tags each finding with a `kind`. **`kind: policy` means it is enforceable** —
+FailproofAI Cloud tags each finding with a `kind`. **`kind: policy` means it is enforceable** —
 `improvement` and `failure` are code or instrumentation work and are not yours.
 
 ```bash
-agenteye --json audits findings --limit 100 --show-id \
+fp --json audits findings --limit 100 --show-id \
   | jq '.findings[] | select(.kind == "policy") | {id, title, severity, status}'
 ```
 
@@ -42,7 +62,7 @@ says short ids are accepted, and for this subcommand they are not.
 Then read one in full:
 
 ```bash
-agenteye --json audits finding <FULL-UUID>
+fp --json audits finding <FULL-UUID>
 ```
 
 The fields that matter:
@@ -50,9 +70,9 @@ The fields that matter:
 | Field | Use |
 |---|---|
 | `description` / `root_cause_hypothesis` | what happened and why — the policy's rationale |
-| `recommendation` | Failproof AI Cloud's own fix. Often names the mechanism ("add a pre-tool-use hook that rejects…") |
+| `recommendation` | FailproofAI Cloud's own fix. Often names the mechanism ("add a pre-tool-use hook that rejects…") |
 | `evidence.queries` | **runnable SQL, often containing the exact regex** |
-| `evidence.policy_id` | Failproof AI Cloud's internal rule id, e.g. `secret.credential_in_tool_args` |
+| `evidence.policy_id` | FailproofAI Cloud's internal rule id, e.g. `secret.credential_in_tool_args` |
 | `scope` | narrows it — e.g. `{"tool": "db.query"}` |
 | `occurrences`, `evidence.matched_sessions` | how much this actually happens |
 
@@ -66,10 +86,10 @@ answer is mostly config, and a custom policy only covers what the builtins miss.
 
 **The one thing a local audit can never tell you.** failproofai fails open (`traps.md` §3):
 a policy that throws or times out returns allow, and nothing surfaces. Locally that is
-invisible. Failproof AI Cloud records every hook outcome, so the gap is a query:
+invisible. FailproofAI Cloud records every hook outcome, so the gap is a query:
 
 ```bash
-agenteye --json query run --sql "
+fp --json query run --sql "
   SELECT JSONExtractString(payload,'hook_name') AS hook,
          JSONExtractString(payload,'outcome')   AS outcome,
          count() AS c
@@ -92,7 +112,7 @@ protection while quietly letting actions through.
 
 A high denial count means one of two very different things, and **the raw count cannot tell
 you which** — you must measure the *distribution across sessions* before drawing any
-conclusion. Failproof AI Cloud's own finding text says denials mean an agent is "burning a turn each
+conclusion. FailproofAI Cloud's own finding text says denials mean an agent is "burning a turn each
 time", which presumes a retry loop; that is one of the two cases, not the default.
 
 | Shape | Meaning | Fix |
@@ -103,7 +123,7 @@ time", which presumes a retry loop; that is one of the two cases, not the defaul
 Measure it rather than assuming — this query gives the distribution, not just the total:
 
 ```bash
-agenteye --json query run --sql "
+fp --json query run --sql "
   SELECT denials_per_session, count() AS sessions FROM (
     SELECT session_id, count() AS denials_per_session
     FROM events
@@ -125,11 +145,11 @@ proposing anything.
 
 ### 4. The issues board — read it, but classify before believing it
 
-Issues are Failproof AI Cloud's **human attention queue**, not a behaviour log. Three sources feed it,
+Issues are FailproofAI Cloud's **human attention queue**, not a behaviour log. Three sources feed it,
 and only one reliably contains policy work:
 
 ```bash
-agenteye --json issues list --limit 100 --show-id
+fp --json issues list --limit 100 --show-id
 ```
 
 | `source` | What it is | Policy material? |
@@ -150,18 +170,18 @@ an action a hook could have stopped.
 
 **Manual issues are free text**, so treat them exactly like the complaint path — does the
 text describe a *behaviour* ("the agent keeps writing to prod config") or a *measurement*
-("checkout latency is up")? Behaviour goes through the §3 rules-file classification; a
+("checkout latency is up")? Behaviour goes through the *Enforcing a rules file* classification in SKILL.md; a
 measurement does not become a policy no matter how it is phrased.
 
 **Audit-born issues are the ones worth chasing**, because they are findings in a different
 wrapper:
 
 ```bash
-agenteye --json issues list --limit 100 --show-id \
+fp --json issues list --limit 100 --show-id \
   | jq '.issues[] | select(.source == "audit") | {id, title, source_finding_id}'
 ```
 
-Then `agenteye --json audits finding <source_finding_id>` and you are back in §1.
+Then `fp --json audits finding <source_finding_id>` and you are back in §1.
 
 **A caveat worth checking in the target org.** The CLI reference states every finding
 graduates to an issue, but on the live deployment tested here **no issue carried a
@@ -177,10 +197,10 @@ A policy must match real input, and its tests need real payloads (see *Verify it
 
 ```bash
 # a) the finding's own evidence query, bounded
-agenteye --json query run --sql "<evidence.queries[0]> LIMIT 20"
+fp --json query run --sql "<evidence.queries[0]> LIMIT 20"
 
 # b) raw payloads for a cited session
-agenteye --json events --full --session-id <SESSION_ID> --all --limit 1000 \
+fp --json events --full --session-id <SESSION_ID> --all --limit 1000 \
   | jq '.events[].payload'
 ```
 
@@ -196,21 +216,27 @@ that is a real difference in confidence.
 
 ## Then: author it and plug it in
 
-From here it is §2 unchanged — **check builtins and their params first**, pick a mode, name
-the file `*policies.mjs`, test both directions with `scripts/test-policy.mjs`. Failproof AI Cloud
+From here it is *The authoring core* in SKILL.md, unchanged — **check builtins and their params first**, pick a mode, name
+the file `*policies.mjs`, test both directions with `scripts/test-policy.mjs`. FailproofAI Cloud
 changes where the work comes from, not how a policy gets written.
 
-"Plugging it in" is two concrete edits in the target project, and neither touches Failproof AI Cloud:
+"Plugging it in" is two concrete edits in the target project, and neither touches FailproofAI Cloud:
 
 ```
 .failproofai/policies/<name>-policies.mjs     the custom policy (filename convention — traps.md §1)
 .failproofai/policies-config.json             `enabledPolicies` for any builtin that covers a finding
 ```
 
-Nothing about this needs a Failproof AI Cloud permission — a failproofai policy is a local file plus a
-config entry. Then prove both took effect, because neither is self-evident:
+Nothing about *this* needs a FailproofAI Cloud permission — a failproofai policy is a local file
+plus a config entry, and that is the whole story for one machine. It is **not** the whole story
+for a fleet: `fp policies publish`, `fp fleet deploy` and `fp guardrails` are shipped commands
+that carry the same rule to every machine and show it firing, and they need `policies:write`.
+That path belongs to `failproofai-policy-deploy` — hand off rather than assuming the local
+edit is all there is. Then prove both local edits took effect, because neither is self-evident:
 
 ```bash
+export SKILL_DIR=/path/to/skills/failproofai-policy-author   # this skill's own folder
+
 # the custom file actually loads (fail-open hides a file that never loaded — traps.md §3)
 node "$SKILL_DIR/scripts/test-policy.mjs" --policy .failproofai/policies/<name>-policies.mjs \
   --cwd . --event PreToolUse --tool Bash --input '{"command":"<should-deny case>"}' --expect deny
@@ -220,18 +246,18 @@ node "$SKILL_DIR/scripts/test-policy.mjs" --cwd . \
   --event PreToolUse --tool Bash --input '{"command":"sudo ls"}' --expect deny
 ```
 
-Record which Failproof AI Cloud finding each policy came from, in the file itself, so the two systems
+Record which FailproofAI Cloud finding each policy came from, in the file itself, so the two systems
 stay traceable to each other:
 
 ```js
-// derived-from: Failproof AI Cloud finding <full-finding-uuid>
+// derived-from: FailproofAI Cloud finding <full-finding-uuid>
 // "<the finding's title>" (org <slug>, <date extracted>)
 ```
 
-One extra step worth taking: Failproof AI Cloud knows which tools actually exist in the fleet.
+One extra step worth taking: FailproofAI Cloud knows which tools actually exist in the fleet.
 
 ```bash
-agenteye --json list tools      # also: agents, envs, event_types, hooks, error_types
+fp --json list tools      # also: agents, envs, event_types, hooks, error_types
 ```
 
 A policy matching a tool name no tool ever emits is dead on arrival, and this is the cheapest
@@ -243,7 +269,7 @@ After a policy is installed and tested, the finding should not sit open forever.
 
 **Do not run the triage commands yourself.** Two independent reasons:
 
-1. `agenteye`'s confirm prompts **auto-skip on a non-TTY — which is exactly how you run it**.
+1. `fp`'s confirm prompts **auto-skip on a non-TTY — which is exactly how you run it**.
    `audits resolve <id>` executes immediately, with no chance to catch a wrong id, on a board
    the user's whole team shares.
 2. Triage needs `audits:write`, which a read-only account does not have — a standard-role
@@ -252,8 +278,8 @@ After a policy is installed and tested, the finding should not sit open forever.
 So **print the commands and let the user run them**:
 
 ```bash
-agenteye issues comment-add <ISSUE_ID> --body "Enforced by failproofai policy \`<name>\` in .failproofai/policies/<file> — denies <what>, verified with N cases."
-agenteye audits resolve <FULL-FINDING-UUID>
+fp issues comment-add <ISSUE_ID> --body "Enforced by failproofai policy \`<name>\` in .failproofai/policies/<file> — denies <what>, verified with N cases."
+fp audits resolve <FULL-FINDING-UUID>
 ```
 
 `resolve` leaves no suppression, so a genuine recurrence reopens as new — the right verb once
@@ -263,7 +289,7 @@ mirrors onto the other.
 
 ## What to report
 
-Same honest split as everywhere else, plus one Failproof AI Cloud-specific line:
+Same honest split as everywhere else, plus one FailproofAI Cloud-specific line:
 
 - **enforced now** — new policies + builtins enabled, with the finding each came from
 - **already covered** — findings a builtin already handles

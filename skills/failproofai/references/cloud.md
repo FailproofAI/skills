@@ -1,37 +1,86 @@
-# Failproof AI Cloud: the CLI, keys and orgs, the HTTP API, self-hosting
+# FailproofAI Cloud: the CLI, keys and orgs, the HTTP API, self-hosting
 
-The read-and-administer control plane over telemetry your agents already emitted. This file
-is the **concepts and the auth model**; driving a live deployment — flags, filters,
-pagination, triage — belongs to `agenteye-cli`. Grep anchors point into the cloud CLI's
-Python package `agenteye_cli/` — the installed build under `~/.local/share/uv/tools/agenteye/lib/python*/`, except the key-mode anchors (`resolve_auth`, `deny_in_key_mode`, `_org_header`, `_v1_path`, `_V1_MECHANICAL_FAMILIES`, `_V1_NO_EQUIVALENT`), which 0.1.13 does not ship — grep those in the repo's `cli/agenteye_cli/`.
+The read-and-administer control plane over telemetry your agents already emitted — and, as of
+`fp-cloud-cli` 0.0.1b1, the place cloud-managed policy is written, tested and rolled out.
+This file is the **concepts and the auth model**; driving a live deployment — flags, filters,
+pagination, triage — belongs to `fp-cloud-cli`, and getting a policy onto machines belongs to
+`failproofai-policy-deploy`. Grep anchors point into the cloud CLI's Python package `fp_cli/`
+— the installed build under `~/.local/share/uv/tools/fp-cloud-cli/lib/python*/`. Every anchor
+below resolves there in 0.0.1b1; the one exception is `INTROSPECT_PATH`, which lives in the
+local npm CLI's `cloud-introspect.ts`.
 
-## The product is Failproof AI Cloud; it was called AgentEye
+## The product is FailproofAI Cloud; it was called AgentEye
 
-Use the new name in anything you write. The old one survives wherever a rename is expensive
-— every env var is still `AGENTEYE_*`, the OpenAPI title is still "AgentEye API", the tenant
-header is still `X-AgentEye-Org`, the self-hosted images are still `ghcr.io/agenteye-enterprise`.
-Those are literals: **never "modernise" one in a command or a config**, or it stops working.
+Use the new name in anything you write, spelled the way the binary spells it — **FailproofAI
+Cloud**, no space inside "FailproofAI". The old name survives wherever a rename would break
+something on the wire or on disk. Those are literals: **never "modernise" one in a command or
+a config**, or it stops working.
+
+| Still `AgentEye`, permanently | Who still reads it |
+|---|---|
+| `X-AgentEye-Org`, `X-AgentEye-Client`, `X-AgentEye-Signature`, cookie `ae_session` | the wire and the session — `fp` still sends every one |
+| OpenAPI title "AgentEye API" | generated clients key off it |
+| `AGENTEYE_HOME`, `~/.agenteye/events` | the local daemon's event spool. It is a contract with the collector, not a preference, so it did not move |
+| `AGENTEYE_KEY` (collector ingest), `AGENTEYE_API_KEY` (dashboard admin) | two *different* credentials, neither of them the CLI's. `FP_API_KEY` was named deliberately not to collide — never tell anyone to reuse either one for it |
+| `agenteye-evaluator` / `agenteye_evaluator`, UA `agenteye-server/<version>` | the evaluator was not renamed at all |
+| `ghcr.io/agenteye-enterprise/*`, namespace `agenteye`, `agenteye.events` / `agenteye.agent_sessions` | self-hosted infrastructure |
+
+**Environment variables are the exception, and the rule is: the prefix follows the binary.**
+`fp` reads **zero** `AGENTEYE_*` variables. Legacy `agenteye` 0.1.13 still reads its own
+`AGENTEYE_HOME` / `AGENTEYE_CLI_TOKEN` / `AGENTEYE_CLI_JSON` and reads no `FP_*`. Exporting
+the wrong family is silent: the CLI simply behaves as if nothing were set.
+
+Everything `fp` reads, in full:
+
+| Var | Effect |
+|---|---|
+| `FP_TOKEN` | session token — same as `--token` |
+| `FP_API_KEY` | API key — same as `--api-key` |
+| `FP_JSON` | same as `--json` |
+| `FP_ORG` | tenant slug — same as `--org` |
+| `FP_DASHBOARD_URL` | same as `--base-url` |
+| `FP_INSECURE` | same as `--insecure` |
+| `FP_HOME` | the CLI's own config **directory**, used as-is |
+| `FAILPROOFAI_HOME` | the failproofai home root; `fpcli/` is appended to it |
+| `FP_ANALYTICS_DISABLED` | opt out of telemetry (`DO_NOT_TRACK` works too) |
+| `FP_CLI_DEV` | internal dev/test switch |
+
+**The infix is dropped.** A mechanical `AGENTEYE_` → `FP_` substitution invents names nothing
+reads: it is **`FP_TOKEN` and `FP_JSON`**, never `FP_CLI_TOKEN` or `FP_CLI_JSON`. `FP_CLI_DEV`
+is the sole survivor of the `CLI` infix and is a test switch, not an auth or output selector —
+do not generalise from it.
 
 ## Resolve the binary before writing a single command
 
-The CLI is renaming with the product. Docs document `fp`, installed with
-`uv tool install fp-cli`; what is actually on a machine today is usually `agenteye`. The
-docs are ahead of the shipped artifact rather than wrong, so expect this to flip. Resolve it
-once and use whatever answers:
+Three binaries carry this product's name and they are not interchangeable. Resolve once, `fp`
+first, and write against whatever answers:
 
 ```bash
 command -v fp agenteye
 ```
 
-Examples in this skill are written as `agenteye`, because that is the binary that exists
-today. When `fp` is what resolved, substitute it — the subcommands, flags and behaviour are
-identical.
+| Binary | What it is | Install |
+|---|---|---|
+| `fp` | **the cloud CLI** — dist `fp-cloud-cli` 0.0.1b1, module `fp_cli`. This is what everything here is written against | `uv tool install fp-cloud-cli` |
+| `agenteye` | the **legacy** cloud CLI, 0.1.13. A separate distribution, still installable, still authenticates. It has no `policies`, `fleet`, `guardrails` or `usage` | `uv tool install agenteye` |
+| `failproofai` | the **local enforcement** CLI (npm, Node >= 20.9). A different tool entirely — it decides on this machine and never touches `/v1` | `npm install -g failproofai` |
 
-**The docs also describe a newer CLI than the one installed.** Three documented surfaces
-are absent from `agenteye` 0.1.13 and exit 2 there — they exist in current source, so it
-is a version gap, not a doc error: the `usage` command (and `usage:read`), the `--api-key`
-global, and `audits context-show/-set/-refresh` plus `audits create
---text/--text-file/--url`. Probe with `--help`; never infer presence from the docs.
+**`uv tool install fp-cli` installs nothing you want.** `fp_cli` is the *module*;
+`fp-cloud-cli` is the *distribution*. The module name never appears in an install command.
+
+Examples in this file are written as `fp`. On a machine that only has `agenteye`, most of the
+observe and manage commands carry over under the same names, but not all of them and not the
+same environment — `usage` and `audits context-*` are absent, the enforce group does not exist
+at all, and the env prefix goes back to `AGENTEYE_*`. Re-check each one with `--help` rather
+than assuming a rename was the only difference.
+
+**Probe with `--help`; never infer a surface from prose.** That habit used to be needed
+because the docs ran ahead of the shipped artifact — `usage`, the `--api-key` global, and
+`audits context-show/-set/-refresh` plus `audits create --text/--text-file/--url` were all
+documented while `agenteye` 0.1.13 exited 2 on them. All four ship in `fp` 0.0.1b1 (verified
+against `fp usage --help`, `fp audits --help`, and `fp --api-key` parsing as a global). The
+gap closed; the habit still pays, in the other direction — `fp --help` lists 23 commands, and
+the ENFORCE group is newer than most writing about this product.
 
 ## Two auth modes, and they never mix
 
@@ -39,8 +88,15 @@ global, and `audits context-show/-set/-refresh` plus `audits create
 |---|---|---|
 | Credential | `ae_session` cookie, from `login`'s emailed one-time code | `Authorization: Bearer <key>` |
 | Routes hit | the dashboard's `/api/*` | the server's versioned `/v1/*` |
-| Stored | `~/.agenteye/cli.json`, mode 0600 | **never written to disk** |
-| Selected by | `--token` / `AGENTEYE_CLI_TOKEN` / saved session | `--api-key` / `AGENTEYE_CLI_API_KEY` |
+| Stored | `~/.failproofai/fpcli/cli-auth.json`, mode 0600 | **never written to disk** |
+| Selected by | `--token` / `FP_TOKEN` / saved session | `--api-key` / `FP_API_KEY` |
+
+The session file moved **inside** the local home (`config.py`, grep `FPCLI_SUBDIR`) — there is
+no longer a separate cloud config tree. `~/.agenteye` stayed put because it is the collector's
+event spool, not a preference. Two pre-move paths are still read once and adopted, never
+written: `$FP_HOME/cli.json` (checked first — an operator who relocated the config is the one
+an unexplained logout hits hardest) and `~/.fp/cli.json`. The old file is **copied**, not
+moved, so a downgrade still finds its session.
 
 The CLI is written against `/api/*` at ~70 call sites and **rewrites every path to `/v1/*` at
 four request chokepoints** when a key is in play (`client.py`, grep `_v1_path`) — mechanical
@@ -51,40 +107,55 @@ implemented by the dashboard. That is *why* those commands refuse.
 
 **Commands that refuse before any HTTP call** (`_context.py`, grep `deny_in_key_mode`; exit
 2): `login`, `logout`, `orgs list|current|perms|switch`, `keys update`, the whole `agent`
-group. `keys update` is unreachable *by construction* — it needs `keys:update`, which no key
-can hold.
+group, and **every `policies`, `fleet` and `guardrails` subcommand except `policies test`**.
+`keys update` is unreachable *by construction* — it needs `keys:update`, which no key can
+hold. The enforce group is the consequential one; see *The ENFORCE group* below.
 
 `whoami` is the one command that still works under a key, reporting an honest different
 shape — `{"logged_in": false, "auth_mode": "api_key", "active_org": "<slug|null>"}`, **exit
-0**. It never exits 4; a `null` `active_org` is the warning sign, see *Orgs*.
+0**. A `null` `active_org` is the warning sign, see *Orgs*.
+
+**`whoami` never signals with its exit code.** Signed out it prints
+`{"logged_in": false, "auth_mode": "none"}` and still **exits 0** — confirmed live. Branch on
+the `.logged_in` / `.auth_mode` *field*, never on the exit status; any script reading "exit 4
+means not signed in" off this command is testing something that does not happen:
+
+```bash
+fp --json whoami | jq -e '.logged_in' >/dev/null || echo "not signed in"
+```
 
 Precedence, highest first (`_context.py`, grep `resolve_auth`): `--api-key` **and** `--token`
-together is a usage error, never guessed; then `--api-key`, `--token`, `AGENTEYE_CLI_API_KEY`
-(a key env var beats a token env var), `AGENTEYE_CLI_TOKEN`, the saved session, then exit 4.
-`--api-key ""` — an unset CI variable spelled out — keeps key mode with an empty credential
-and fails rather than silently acting as whoever is logged in there. That variable is
-deliberately neither `AGENTEYE_KEY` (the collector's `events:add` ingest key — every read
-would 403 for no visible reason) nor `AGENTEYE_API_KEY` (the dashboard's own admin key).
+together is a usage error, never guessed; then `--api-key`, `--token`, `FP_API_KEY` (a key env
+var beats a token env var), `FP_TOKEN`, the saved session, then exit 4. `--api-key ""` — an
+unset CI variable spelled out — keeps key mode with an empty credential and fails rather than
+silently acting as whoever is logged in there. `FP_API_KEY` is deliberately neither
+`AGENTEYE_KEY` (the collector's `events:add` ingest key — every read would 403 for no visible
+reason) nor `AGENTEYE_API_KEY` (the dashboard's own admin key). Three names, three
+credentials; the collision the naming avoids is the one that costs an afternoon.
 
 ## The ten global options
 
-They MUST precede the command. `agenteye --json events` ✓, `agenteye events --json` ✗ — a
-usage error, not a slightly-off invocation (`app.py`, grep `_GLOBAL_FLAGS`).
+They MUST precede the command. `fp --json events` ✓, `fp events --json` ✗ — a usage error,
+not a slightly-off invocation (`app.py`, grep `_GLOBAL_FLAGS`). A command's *own* options come
+after it, so a full invocation reads global → command → subcommand → command options:
+`fp --json keys create ci-bot --permission-set read-only`.
 
 | Flag | Env | Note |
 |---|---|---|
-| `--json` | `AGENTEYE_CLI_JSON` | also **skips every confirmation prompt** |
-| `--base-url <url>` | `AGENTEYE_DASHBOARD_URL` | default `https://app.befailproof.ai`; saved at login |
-| `--org <slug>` | `AGENTEYE_ORG` | per-invocation tenant |
-| `--token <tok>` | `AGENTEYE_CLI_TOKEN` | session override |
-| `--api-key <key>` | `AGENTEYE_CLI_API_KEY` | automation; never saved |
+| `--json` | `FP_JSON` | also **skips every confirmation prompt** |
+| `--base-url <url>` | `FP_DASHBOARD_URL` | default `https://app.befailproof.ai`; saved at login |
+| `--org <slug>` | `FP_ORG` | per-invocation tenant |
+| `--token <tok>` | `FP_TOKEN` | session override |
+| `--api-key <key>` | `FP_API_KEY` | automation; never saved |
 | `--timeout <secs>` | — | default 30; `<= 0` is a usage error |
 | `--quiet`, `-q` | — | suppress stderr status |
 | `--no-color` | `NO_COLOR` | — |
-| `--insecure` / `--secure` | `AGENTEYE_INSECURE` | disables TLS verification; **persisted at login** |
+| `--insecure` / `--secure` | `FP_INSECURE` | disables TLS verification; **persisted at login** |
 | `--help`, `-h` (`--version`) | — | — |
 
-Flags > env > saved config; `AGENTEYE_HOME` relocates the config directory.
+Flags > env > saved config. `FP_HOME` relocates the config directory and is used verbatim;
+`FAILPROOFAI_HOME` names the home *root* and gets `fpcli/` appended. `AGENTEYE_HOME` does
+nothing here — it is the daemon's spool, and `fp` does not read it.
 
 **`--json` is not just a formatter.** Destructive confirmations auto-skip on `--json`, on
 `--yes`, *and* whenever stdin is not a TTY (`commands/_write.py`, grep `def confirm`) — so the
@@ -94,6 +165,50 @@ agent-driven invocation. Confirm destructive intent with the human yourself.
 Exit codes are a contract (`errors.py`, grep `exit_code`): 1 generic/API · 2 usage, bad
 permission token, or key-mode-unsupported · 3 network · 4 not logged in · 5 authenticated but
 missing permission · 6 not found, including an unknown settings key.
+
+## The ENFORCE group: the cloud writes policy now, not just reads telemetry
+
+`fp --help` groups its 23 commands, and one group is new enough that most writing about this
+product predates it. **Deployment is CLI-drivable.** Any text — including older parts of these
+skills — saying that assignment, promotion or rollback is "not exposed by the cloud CLI" or is
+"dashboard work" is wrong, and worse than wrong: it tells an agent to stop looking for a
+command that ships.
+
+| Command | Subcommands | What it is |
+|---|---|---|
+| `policies` | `list show publish enable disable delete test compose` | the versioned source of a cloud-managed policy |
+| `fleet` | `list show deploy diff history rename rollback` | which version is running on which machine, and in which effect |
+| `guardrails` | `summary timeline` | what enforcement actually blocked, after the fact |
+
+The lifecycle is compose → test → publish → `fleet deploy` → guardrails, and every step of it
+has traps worth more than a table row: **publishing deploys nothing**, a bare `--add` on a new
+policy lands it in `enforce`, `disable` stops enforcement while `delete` does not, and
+`policies compose` needs `policies:write` rather than the `agent:use` its name suggests. All
+of that belongs to **`failproofai-policy-deploy`**; go there before you run any of it. What
+belongs *here* is the one constraint that is an auth fact:
+
+**Every `policies`, `fleet` and `guardrails` subcommand except `policies test` exits 2 under
+an API key** (grep `deny_in_key_mode` in `policies_cmds.py`, `fleet_cmds.py`,
+`guardrails_cmds.py`). These are session-only commands, and `fp --help` says so in its own CI
+line. **CI cannot deploy policy.** A pipeline that mints a scoped key and expects to promote a
+version from `observe` to `enforce` fails at the first call, before any request, with a usage
+error rather than a permission error — so widening the key never helps. Rollout is a signed-in
+human action; what CI *can* do is the one command that never authenticates at all:
+
+```bash
+fp --json policies test ./rule.mjs --command "git push --force origin main"
+# {"ok":true,"decision":"deny","policies":[{"name":"no-force-push","decision":"deny",…}]}
+```
+
+That runs locally — no server, no fleet, no auth, `node` on `PATH` its only requirement — and
+resolves `import { deny } from "failproofai"` with nothing installed in the working directory,
+because the CLI shims the module itself. The `--json` body is `{ok, decision, policies, syntax,
+expected, met}`, and `decision` is the **strictest** decision any registered policy returned,
+not the first. Adding `--expect deny` turns it into a test-suite assertion: exit 0 when it
+matches, **exit 1** when it does not.
+
+State its limit honestly: it proves the policy parses, registers and decides for the input you
+gave it. It cannot prove the daemon feeds it the same context.
 
 ## Permissions
 
@@ -224,7 +339,10 @@ one who lacks access; it names up to 50 members holding `users:update`.
 
 Some response bodies are **intentionally untyped** because the server builds them as dynamic
 JSON — inspect a real response before generating a typed client. Policy-enforcement deployment
-is deliberately absent from `/v1`; do not hunt for a deploy endpoint. And large parts of `/v1`
+is deliberately absent from `/v1` — it lives on `/enforcement/v1/*`, off the public surface, so
+there is no bearer-auth deploy endpoint to find. **That is a statement about `/v1`, not about
+the product**: `fp fleet deploy` ships and drives a rollout end to end over the dashboard's
+`/api/*` with a signed-in session. And large parts of `/v1`
 have **no CLI equivalent**, invisible to anyone mapping the product from `--help`: dashboards
 and tiles, agent contracts (`/audits/contracts`), permission sets, `/evaluation-jobs`,
 `/sessions/{id}/re-evaluate`, `/usage/windows`, and ingest itself.
@@ -277,4 +395,6 @@ email needs an enabled email channel plus SMTP, falling back to
 `alerts.email_default_recipients`. Miss both and the capacity failure is invisible.
 
 For anything you would type against a live deployment — filters, pagination limits,
-`--aggregate`, the saved-SQL runner, alerts, issue triage — hand off to **`agenteye-cli`**.
+`--aggregate`, the saved-SQL runner, alerts, issue triage — hand off to **`fp-cloud-cli`**.
+For getting a policy onto machines — publish, deploy in observe, promote to enforce, prove it
+fired, roll back — hand off to **`failproofai-policy-deploy`**.

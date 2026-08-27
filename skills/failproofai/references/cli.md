@@ -1,8 +1,26 @@
 # The `failproofai` command surface
 
-Every subcommand, flag, environment variable and on-disk path of the **local** binary. The
-cloud binary (`agenteye`) is `references/cloud.md`; this file never mentions `fp` because no
-such package exists.
+Every subcommand, flag, environment variable and on-disk path of the **local** binary — the
+npm package `failproofai` (Node >= 20.9) that installs hooks, runs the daemon, and enforces
+on one machine. Nothing on this page is a cloud command.
+
+**Three binaries carry this product's name. Keep them apart.** `failproofai` is local
+enforcement and is what this file documents. `fp` (dist `fp-cloud-cli`, installed with `uv
+tool install fp-cloud-cli` — `fp_cli` is the module, never the distribution) is the cloud
+control plane: sessions, policies, fleet, guardrails. It is a **separate package with a
+separate command surface**, documented in `references/cloud.md`. `agenteye` is the legacy
+cloud CLI — still installable, still works, but it has no `policies`, `fleet`, `guardrails`
+or `usage`. Resolve the cloud one before writing a command and prefer `fp`:
+
+```bash
+command -v fp agenteye
+```
+
+The blur that costs time is environment: **the prefix follows the binary.** `FAILPROOFAI_*`
+below is read by the local CLI and daemon and by nothing in the cloud; `FP_*` is read only
+by `fp`; `AGENTEYE_HOME` is a path this codebase reads and not a cloud setting at all. The
+single genuine overlap is `FAILPROOFAI_HOME`, which both honour — see *Environment
+variables*.
 
 Anchors are greppable names inside the `failproofai` package. `bin/failproofai.mjs` is the
 whole CLI entrypoint — one 1,900-line file with hand-rolled parsers, no framework, and **no
@@ -66,10 +84,22 @@ Also dead: `connectionStatusLines()` is exported and referenced only by its own 
 
 ## Parser rules that hold everywhere
 
+Everywhere in `failproofai`, that is. None of this transfers to `fp`, which is a
+conventional option parser and takes `--timeout=5` and the like without complaint.
+
 - **No `--flag=value`.** Every guard compares whole tokens against a `Set`, so `--since=6m`,
-  `--timeout=30`, `--scope=user`, `--cli=claude` all trip "Unexpected argument". The only
-  exceptions in the product are `pack --only=`/`--category=` (grep `parseList`) and `audit
-  --email=` (grep `--email=` in `audit/cli.ts`).
+  `--timeout=30`, `--scope=user`, `--only=git`, `--category=git` all trip "Unexpected
+  argument". Exactly **four** flags take the equals form and nothing else does:
+
+  | Flag | Where | Anchor |
+  |---|---|---|
+  | `--cli=` | everywhere `--cli` is accepted | grep `parseCliList`, `startsWith("--cli=")` |
+  | `--out=` | the pack build/publish path | grep `outFlagFrom` |
+  | `--effect=` | the pack build/publish path | grep `effectFlagFrom` |
+  | `--email=` | `audit --schedule` | grep `--email=` in `audit/cli.ts` |
+
+  `--only` and `--category` are **not** among them, despite sitting beside `--cli` in the
+  same `pack add` invocation and reading like a set with it. Write them as two tokens.
 - **Unknown-flag validation is per-branch, and `config` has none.** `failproofai config
   --statuss` does not error — it falls through every check and **launches the interactive
   wizard**. Same for a mistyped `--no-transcript`, `--disconect`, or any typo at all.
@@ -258,12 +288,13 @@ prints a loud warning (grep `resolveDashboardHost`).
 
 ## Environment variables
 
-Confirmed read sites only. `FAILPROOFAI_KEY` is **not** one of these — it appears in docs as
-a shell placeholder for the pasted token and nothing in the product reads it.
+Confirmed read sites only, and **all of them are `FAILPROOFAI_*` except one**.
+`FAILPROOFAI_KEY` is **not** among them — it appears in docs as a shell placeholder for the
+pasted token and nothing in the product reads it.
 
 | Variable | Effect | Anchor |
 |---|---|---|
-| `FAILPROOFAI_HOME` | Relocates the entire layout. **Used verbatim** — `.failproofai` is NOT appended (unlike the `home` function argument) | `fp-home.ts`, grep `failproofaiHome` |
+| `FAILPROOFAI_HOME` | Relocates the entire layout. **Used verbatim** — `.failproofai` is NOT appended (unlike the `home` function argument). The **only** variable the cloud binary `fp` also reads | `fp-home.ts`, grep `failproofaiHome` |
 | `FAILPROOFAI_NO_FIRST_RUN` | Suppresses the first-run wizard. Must be exactly `"1"` | `configure-wizard.ts`, grep `NO_FIRST_RUN` |
 | `FAILPROOFAI_DAEMON_BINARY` | Names the daemon binary explicitly; also **disables version-skew warnings entirely** | `daemon-service.ts`, grep `resolveFailproofaidBinaryPath`, `daemonVersionSkew` |
 | `FAILPROOFAI_CLOUD_URL` | Overrides `credentials.json` outright; `--status` says "configured by environment". **Requires `FAILPROOFAI_CLOUD_TOKEN` and `FAILPROOFAI_MACHINE_ID` or the daemon errors** | `crates/failproofaid/src/cloud_client.rs`, grep `from_env` |
@@ -278,8 +309,32 @@ a shell placeholder for the pasted token and nothing in the product reads it.
 | `FAILPROOFAI_HOOK_LOG_FILE` | **Names a DIRECTORY, not a file.** `"1"`/`"true"` = default `logs/`; anything else is used as a directory and `hooks.log` is created inside it | `hook-logger.ts`, grep `rawFile !== "1"` |
 | `FAILPROOFAI_API_URL` | Auth/report base. Note `FAILPROOF_API_URL` (no `AI`) is checked **first** in the audit login path | `audit/cli-login.ts` |
 | `FAILPROOFAI_DAEMON_SOCKET`, `_STATE_DIR`, `_AUTH_DIR`, `_PACK_DIR`, `_PACK_BASE_URL`, `_CLOUD_POLICY_DIR`, `_POLICY_LOAD_TIMEOUT_MS`, `_PACKAGE_ROOT`, `_DIST_PATH` | Path/timeout overrides, mostly for tests and containers | grep each name |
-| `AGENTEYE_HOME` | The only `AGENTEYE_*` variable this codebase reads — locates the legacy `~/.agenteye/events` SDK spool | `config.rs` |
+| `AGENTEYE_HOME` | The only `AGENTEYE_*` variable this codebase reads. It is a **path, not a credential**: it locates the local daemon's legacy SDK spool, default `~/.agenteye/events`, and the daemon still watches that path. Nothing cloud-facing reads it | `config.rs` |
 
+### `FP_*` is the cloud binary and is not read here
+
+Not one `FP_*` name reaches this codebase. `FP_HOME`, `FP_JSON`, `FP_TOKEN`, `FP_API_KEY`,
+`FP_ORG`, `FP_DASHBOARD_URL`, `FP_INSECURE`, `FP_ANALYTICS_DISABLED` and `FP_CLI_DEV`
+configure `fp` and only `fp` — the prefix follows the binary. Two things routinely go wrong
+when someone crosses the streams:
+
+- **The infix drops.** It is `FP_TOKEN` and `FP_JSON`, never `FP_CLI_TOKEN` /
+  `FP_CLI_JSON`. A mechanical `AGENTEYE_` → `FP_` rewrite of the legacy names produces
+  variables nothing reads, and they fail silently as an unauthenticated call.
+- **The homes now nest.** `fp` keeps its session at `~/.failproofai/fpcli/cli-auth.json`
+  (mode `0600`) — a subdirectory of the local home, not a second tree beside it. Its
+  precedence is `FP_HOME` (its own variable, used **as-is**: it names the CLI's directory,
+  not the home root) → `FAILPROOFAI_HOME` (the home **root**, with `fpcli` appended) →
+  `~/.failproofai/fpcli`. So exporting `FAILPROOFAI_HOME` to relocate the local layout
+  relocates the cloud session with it, and a stale export is enough to make `fp whoami`
+  report logged out on a machine that is signed in. Note the two variables disagree about
+  what they name: the local CLI uses `FAILPROOFAI_HOME` verbatim as the layout root (see
+  the table), `FP_HOME` is one level deeper.
+
+Going the other way is worse, because these names are **live literals owned by other
+components** and renaming one breaks a running system: `AGENTEYE_KEY` is the collector's
+ingest bearer, `AGENTEYE_API_KEY` is dashboard admin, and `FP_API_KEY` was named
+deliberately so it would *not* collide with either. Never substitute one for another.
 `AGENTEYE_SPOOL_TO_FAILPROOFAI`, `AGENTEYE_ENVIRONMENT` and `AGENTEYE_ORG` appear in
 FailproofAI's docs but exist **nowhere in this codebase** — they belong to the Python SDK.
 
