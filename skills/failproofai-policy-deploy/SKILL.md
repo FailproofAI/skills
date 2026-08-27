@@ -72,11 +72,18 @@ distribution, and the module name installs nothing.
 Full surface — every flag, every JSON key, every exit code — in `references/cloud-lane.md`. What
 follows is the path through it.
 
-**What was and was not run.** `fp policies test` below was executed and its output is
-verbatim. `publish`, `compose`, `enable`, `disable`, `delete` and `fleet deploy` are documented
-from `fp <cmd> --help` and the installed `fp_cli` source; the account used held
-`policies:read` only, so none of them was executed. Flag names, JSON keys and exit codes come
-from that source, not from a run.
+**What was and was not run.** `policies test`, `publish`, `show`, `disable`, `enable`,
+`delete` and `compose` were executed end to end against a live org with `policies:write`, on a
+throwaway policy that was archived afterwards; their output here is verbatim. Confirmed that
+way: `publish` returns `carriers: {}` on a new policy, which is the proof that **publishing
+deploys nothing**; `disable`/`enable`/`delete` return `machinesUpdated`; a policy's own
+`description` in `customPolicies.add({...})` is **not** the published description — that comes
+only from `--description`, and without it the dashboard row is blank.
+
+`fleet deploy`, `fleet rollback` and reading `guardrails` after a real fire are still documented
+from `fp <cmd> --help` and the installed `fp_cli` source, not from a run. They were deliberately
+not executed: the org available carries live machines, `fleet` has no delete, and `rollback` is
+append-only, so there is no way to deploy for a test and leave no trace.
 
 ### Preflight
 

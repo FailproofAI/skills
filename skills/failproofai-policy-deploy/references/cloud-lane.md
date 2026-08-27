@@ -317,7 +317,11 @@ fp --json fleet deploy <machine-id> --add no-force-push:enforce
 The server accepts a deploy to any id — that is how a machine gets pre-staged before it ever
 polls. Without `--create` the CLI refuses an id nobody has checked in under (exit 6). With it, a
 **typo mints a machine nobody owns**, carrying policies nobody will collect, and the only sign is
-an extra row in `fleet list`. The dashboard cannot hit this because it deploys to a machine
+an extra row in `fleet list` — a permanent one. `fp fleet` has `list`, `show`, `deploy`, `diff`,
+`history`, `rollback` and `rename`, and **no delete or forget**: nothing in the CLI removes a
+machine once it exists. `rename` can label it as junk; it cannot take it back out. Verified live
+against a real org: a mistyped id is not a recoverable mistake, so treat `--create` as
+write-once and confirm the id before passing it. The dashboard cannot hit this because it deploys to a machine
 picked from a list.
 
 ## `fleet rollback` / `rename`
