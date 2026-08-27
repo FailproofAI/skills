@@ -1,9 +1,10 @@
 # Getting real session data
 
 Two jobs: **find sessions worth looking at**, and **turn one into a fixture** you
-can replay through your evaluator. Both go through the `agenteye` CLI, which
-needs a logged-in session (`agenteye login`) and a dashboard URL
-(`AGENTEYE_DASHBOARD_URL` or `--base-url`).
+can replay through your evaluator. Both go through the `fp` CLI, which needs a
+logged-in session (`fp login`) and a dashboard URL (`FP_DASHBOARD_URL` or
+`--base-url`). `fp login` records both in its config, so the recipes below read
+them from there rather than asking you to repeat yourself.
 
 ## Contents
 
@@ -26,19 +27,26 @@ The CLI has no `export` command, but the endpoint takes the same `ae_session`
 cookie your CLI login already stored (it's permission-gated on `events:read`), so
 `curl` reaches it with no new credential:
 
+One file holds all three things this needs — the dashboard URL, the session
+token, and the active org — so read them together:
+
 ```bash
-BASE="${AGENTEYE_DASHBOARD_URL:?set your dashboard URL}"
-TOKEN=$(python3 -c "import json,os,pathlib; \
-  p=pathlib.Path(os.environ.get('AGENTEYE_HOME') or (pathlib.Path.home()/'.agenteye'))/'cli.json'; \
-  print(json.load(open(p))['session_token'])")
+eval "$(python3 -c "import json,os,pathlib; \
+  p=pathlib.Path(os.environ.get('FP_HOME') or (pathlib.Path.home()/'.failproofai'/'fpcli'))/'cli-auth.json'; \
+  c=json.load(open(p)); \
+  print(f'BASE={c[\"base_url\"]}\nTOKEN={c[\"session_token\"]}\nORG={c.get(\"org\",\"\")}')")"
 
 mkdir -p fixtures
-curl -sSf -b "ae_session=$TOKEN" "$BASE/api/sessions/run-001/export" -o fixtures/run-001.json
+curl -sSf -b "ae_session=$TOKEN" -H "X-AgentEye-Org: $ORG" \
+  "$BASE/api/sessions/run-001/export" -o fixtures/run-001.json
 ```
 
-Multi-org logins need the active tenant too — add `-H "X-AgentEye-Org: <slug>"`
-(`agenteye --json orgs current` tells you the slug). If it 401s, the session
-expired: `agenteye login`. If it 403s, the login lacks `events:read`.
+The config lives at `~/.failproofai/fpcli/cli-auth.json` (mode 0600), or under
+`$FP_HOME/fpcli/` if you moved it. `X-AgentEye-Org` keeps its name on purpose —
+the wire headers and the `ae_session` cookie are a contract with the server and
+did not rename with the CLI. On a single-org login `$ORG` is harmless to send.
+If it 401s, the session expired: `fp login`. If it 403s, the login lacks
+`events:read`.
 
 Then it round-trips straight into the model, which is the whole point:
 
@@ -55,7 +63,7 @@ what production sends.
 If `curl` isn't available or the endpoint is unreachable, you can approximate the
 body from the events feed. Be honest with the user that it's an approximation.
 
-**Build it from `events` alone — never from `agenteye sessions`.** The sessions
+**Build it from `events` alone — never from `fp sessions`.** The sessions
 feed looks like the right source and isn't:
 
 - It's anchored on `agent_start`, so a session without one returns **zero rows**
@@ -70,7 +78,7 @@ The events feed carries `session_id`, `agent_id`, and `environment` on every row
 so with `--order asc` everything you need is derivable:
 
 ```bash
-agenteye --json events --full --session-id run-001 --order asc --all --limit 1000 \
+fp --json events --full --session-id run-001 --order asc --all --limit 1000 \
   > /tmp/events.json
 ```
 
@@ -109,19 +117,19 @@ You want a good one and a bad one. Discover valid filter values before filtering
 guessing an env or agent id wastes a round trip:
 
 ```bash
-agenteye --json list agents          # valid agent ids
-agenteye --json list envs            # valid environments
-agenteye --json list score_filters   # score keys that already exist
-agenteye --json list error_types
+fp --json list agents          # valid agent ids
+fp --json list envs            # valid environments
+fp --json list score_filters   # score keys that already exist
+fp --json list error_types
 ```
 
 | goal | command |
 |---|---|
-| failed runs | `agenteye --json sessions --status error,timeout --since 7d --all --limit 1000` |
-| where it hurts | `agenteye --json errors --aggregate --since 7d` |
-| recent runs | `agenteye --json sessions --since 24h --all --limit 200` |
-| already-scored bad runs | `agenteye --json evals --score helpfulness:..0.5 --since 7d --all --limit 200` |
-| which score regressed | `agenteye --json evals --aggregate --since 7d` → `score_stats` |
+| failed runs | `fp --json sessions --status error,timeout --since 7d --all --limit 1000` |
+| where it hurts | `fp --json errors --aggregate --since 7d` |
+| recent runs | `fp --json sessions --since 24h --all --limit 200` |
+| already-scored bad runs | `fp --json evals --score helpfulness:..0.5 --since 7d --all --limit 200` |
+| which score regressed | `fp --json evals --aggregate --since 7d` → `score_stats` |
 
 There is **no latency or duration filter** on any command, and `sessions` has no
 `--score` flag (score-based discovery goes through `evals`, then take
@@ -129,17 +137,17 @@ There is **no latency or duration filter** on any command, and `sessions` has no
 ordering — drop to SQL:
 
 ```bash
-agenteye --json query run --sql "SELECT session_id, count() c FROM events GROUP BY session_id ORDER BY c DESC LIMIT 10"
+fp --json query run --sql "SELECT session_id, count() c FROM events GROUP BY session_id ORDER BY c DESC LIMIT 10"
 ```
 
-Exposed tables: `events`, `evaluations`, `agent_sessions`. `agenteye --json query schema`
+Exposed tables: `events`, `evaluations`, `agent_sessions`. `fp --json query schema`
 shows the layout.
 
 ## Reading a session
 
 ```bash
-agenteye --json events --session-id run-001 --order asc --all --limit 1000        # timeline (no payload)
-agenteye --json events --full --session-id run-001 --order asc --all --limit 1000 # with payload
+fp --json events --session-id run-001 --order asc --all --limit 1000        # timeline (no payload)
+fp --json events --full --session-id run-001 --order asc --all --limit 1000 # with payload
 ```
 
 The default feed is payload-free and carries a server-computed one-line `summary`
@@ -178,20 +186,22 @@ assume one exists just because an example scores it.
 varies; a field the schema allows may never be populated in their deployment:
 
 ```bash
-agenteye --json events --full --session-id run-001 --all --limit 1000 \
+fp --json events --full --session-id run-001 --all --limit 1000 \
   | jq '[.events[] | select(.event_type=="tool_use") | .payload.tool_name] | unique'
 ```
 
 ## CLI gotchas
 
-- **Globals go before the command**: `agenteye --json events`, never
-  `agenteye events --json` (exit 2).
+- **Globals go before the command**: `fp --json events`, never
+  `fp events --json` (exit 2).
 - **`--all` is capped by `--limit`, which defaults to 50.** A bare `--all` returns
   50 rows with `next_cursor: null`, looking complete. Pass `--all --limit 1000`.
   Server-side the limit clamps at 1000 — a bigger session needs cursor paging.
 - **`--since` is a closed enum**: `all`, `15m`, `1h`, `6h`, `24h`, `7d`. Anything
   else is a usage error; use `--from`/`--to` with full RFC3339 (`2026-05-01T00:00:00Z`).
-- **Exit codes**: 0 ok · 2 usage · 3 unreachable · 4 not signed in (`agenteye login`,
+  (`fp guardrails` is the exception — it takes the five relative windows only, no
+  `all` and no `--from`/`--to`.)
+- **Exit codes**: 0 ok · 2 usage · 3 unreachable · 4 not signed in (`fp login`,
   which you can't complete for them — it needs an emailed code) · 5 missing
   permission · 6 not found.
 - `sessions`/`events` filters accept repeated flags and CSV; `evals`/`errors`
