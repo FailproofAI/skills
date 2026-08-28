@@ -1,0 +1,645 @@
+{
+  "_generated": "sync-harnesses.mjs — do not hand-edit",
+  "clis": [
+    "claude",
+    "codex",
+    "copilot",
+    "cursor",
+    "opencode",
+    "pi",
+    "hermes",
+    "openclaw",
+    "factory",
+    "devin",
+    "antigravity",
+    "goose"
+  ],
+  "toolMaps": {
+    "claude": {},
+    "codex": {
+      "apply_patch": "Edit",
+      "write_stdin": "Bash"
+    },
+    "copilot": {
+      "bash": "Bash",
+      "powershell": "Bash",
+      "list_bash": "Bash",
+      "read_bash": "Bash",
+      "stop_bash": "Bash",
+      "write_bash": "Bash",
+      "list_powershell": "Bash",
+      "read_powershell": "Bash",
+      "stop_powershell": "Bash",
+      "write_powershell": "Bash",
+      "read": "Read",
+      "view": "Read",
+      "show_file": "Read",
+      "write": "Write",
+      "create": "Write",
+      "edit": "Edit",
+      "apply_patch": "Edit",
+      "str_replace_editor": "Edit",
+      "glob": "Glob",
+      "grep": "Grep",
+      "rg": "Grep",
+      "ls": "LS",
+      "web_fetch": "WebFetch"
+    },
+    "cursor": {
+      "Shell": "Bash"
+    },
+    "opencode": {
+      "bash": "Bash",
+      "read": "Read",
+      "write": "Write",
+      "edit": "Edit",
+      "apply_patch": "Edit",
+      "glob": "Glob",
+      "grep": "Grep",
+      "list": "LS",
+      "webfetch": "WebFetch",
+      "websearch": "WebSearch",
+      "todowrite": "TodoWrite",
+      "todoread": "TodoRead"
+    },
+    "pi": {
+      "bash": "Bash",
+      "read": "Read",
+      "write": "Write",
+      "edit": "Edit",
+      "glob": "Glob",
+      "grep": "Grep"
+    },
+    "hermes": {
+      "terminal": "Bash",
+      "bash": "Bash",
+      "read_file": "Read",
+      "write_file": "Write",
+      "patch": "Edit",
+      "web_search": "WebSearch",
+      "web_extract": "WebFetch",
+      "search_files": "Grep",
+      "todo": "TodoWrite"
+    },
+    "openclaw": {
+      "exec": "Bash",
+      "read": "Read",
+      "write": "Write",
+      "edit": "Edit",
+      "grep": "Grep",
+      "glob": "Glob",
+      "web_search": "WebSearch",
+      "web_fetch": "WebFetch"
+    },
+    "factory": {
+      "Execute": "Bash",
+      "Read": "Read",
+      "Edit": "Edit",
+      "Create": "Write",
+      "Grep": "Grep",
+      "Glob": "Glob",
+      "LS": "LS",
+      "FetchUrl": "WebFetch",
+      "WebSearch": "WebSearch",
+      "TodoWrite": "TodoWrite",
+      "Task": "Task"
+    },
+    "devin": {
+      "exec": "Bash"
+    },
+    "antigravity": {
+      "run_command": "Bash",
+      "write_to_file": "Write",
+      "read_file": "Read",
+      "view_file": "Read",
+      "edit_file": "Edit",
+      "replace_file_content": "Edit",
+      "list_dir": "LS",
+      "find_by_name": "Glob",
+      "grep_search": "Grep",
+      "read_url_content": "WebFetch",
+      "search_web": "WebSearch"
+    },
+    "goose": {
+      "shell": "Bash",
+      "write": "Write",
+      "edit": "Edit",
+      "view": "Read",
+      "read_image": "Read",
+      "glob": "Glob",
+      "grep": "Grep",
+      "tree": "LS",
+      "delegate": "Task",
+      "todo__todo_write": "TodoWrite"
+    }
+  },
+  "toolInputMaps": {
+    "claude": {},
+    "codex": {},
+    "copilot": {
+      "Read": {
+        "path": "file_path"
+      },
+      "Write": {
+        "path": "file_path",
+        "file_text": "content"
+      },
+      "Edit": {
+        "path": "file_path",
+        "old_str": "old_string",
+        "new_str": "new_string"
+      }
+    },
+    "cursor": {},
+    "opencode": {
+      "Read": {
+        "filePath": "file_path"
+      },
+      "Write": {
+        "filePath": "file_path"
+      },
+      "Edit": {
+        "filePath": "file_path",
+        "oldString": "old_string",
+        "newString": "new_string",
+        "replaceAll": "replace_all"
+      }
+    },
+    "pi": {
+      "Read": {
+        "path": "file_path"
+      },
+      "Write": {
+        "path": "file_path"
+      },
+      "Edit": {
+        "path": "file_path"
+      }
+    },
+    "hermes": {
+      "Read": {
+        "path": "file_path"
+      },
+      "Write": {
+        "path": "file_path"
+      },
+      "Edit": {
+        "path": "file_path"
+      }
+    },
+    "openclaw": {
+      "Read": {
+        "path": "file_path"
+      },
+      "Write": {
+        "path": "file_path"
+      },
+      "Edit": {
+        "path": "file_path"
+      }
+    },
+    "factory": {},
+    "devin": {},
+    "antigravity": {
+      "Bash": {
+        "CommandLine": "command",
+        "Cwd": "cwd"
+      },
+      "Write": {
+        "TargetFile": "file_path",
+        "CodeContent": "content"
+      },
+      "Edit": {
+        "TargetFile": "file_path"
+      },
+      "Read": {
+        "TargetFile": "file_path",
+        "AbsolutePath": "file_path",
+        "File": "file_path"
+      }
+    },
+    "goose": {
+      "Read": {
+        "path": "file_path",
+        "source": "file_path"
+      },
+      "Write": {
+        "path": "file_path"
+      },
+      "Edit": {
+        "path": "file_path"
+      },
+      "LS": {
+        "path": "file_path"
+      }
+    }
+  },
+  "events": {
+    "SessionStart": {
+      "claude": "observe",
+      "codex": "observe",
+      "copilot": "observe",
+      "cursor": "observe",
+      "opencode": "observe",
+      "pi": "observe",
+      "hermes": "observe",
+      "openclaw": "observe",
+      "factory": "observe",
+      "devin": "observe",
+      "antigravity": "not-installed",
+      "goose": "observe"
+    },
+    "SessionEnd": {
+      "claude": "observe",
+      "codex": "not-installed",
+      "copilot": "observe",
+      "cursor": "observe",
+      "opencode": "observe",
+      "pi": "observe",
+      "hermes": "observe",
+      "openclaw": "observe",
+      "factory": "observe",
+      "devin": "observe",
+      "antigravity": "not-installed",
+      "goose": "observe"
+    },
+    "UserPromptSubmit": {
+      "claude": "block",
+      "codex": "block",
+      "copilot": "block",
+      "cursor": "block",
+      "opencode": "observe",
+      "pi": "block",
+      "hermes": "not-installed",
+      "openclaw": "block",
+      "factory": "block",
+      "devin": "block",
+      "antigravity": "observe",
+      "goose": "observe"
+    },
+    "PreToolUse": {
+      "claude": "block",
+      "codex": "block",
+      "copilot": "block",
+      "cursor": "block",
+      "opencode": "block",
+      "pi": "block",
+      "hermes": "block",
+      "openclaw": "block",
+      "factory": "block",
+      "devin": "block",
+      "antigravity": "block",
+      "goose": "block"
+    },
+    "PermissionRequest": {
+      "claude": "block",
+      "codex": "block",
+      "copilot": "block",
+      "cursor": "not-installed",
+      "opencode": "observe",
+      "pi": "not-installed",
+      "hermes": "not-installed",
+      "openclaw": "not-installed",
+      "factory": "not-installed",
+      "devin": "block",
+      "antigravity": "not-installed",
+      "goose": "not-installed"
+    },
+    "PermissionDenied": {
+      "claude": "observe",
+      "codex": "not-installed",
+      "copilot": "not-installed",
+      "cursor": "not-installed",
+      "opencode": "not-installed",
+      "pi": "not-installed",
+      "hermes": "not-installed",
+      "openclaw": "not-installed",
+      "factory": "not-installed",
+      "devin": "not-installed",
+      "antigravity": "not-installed",
+      "goose": "not-installed"
+    },
+    "PostToolUse": {
+      "claude": "observe",
+      "codex": "block",
+      "copilot": "block",
+      "cursor": "observe",
+      "opencode": "observe",
+      "pi": "observe",
+      "hermes": "observe",
+      "openclaw": "observe",
+      "factory": "observe",
+      "devin": "observe",
+      "antigravity": "observe",
+      "goose": "observe"
+    },
+    "PostToolUseFailure": {
+      "claude": "observe",
+      "codex": "not-installed",
+      "copilot": "observe",
+      "cursor": "not-installed",
+      "opencode": "not-installed",
+      "pi": "not-installed",
+      "hermes": "not-installed",
+      "openclaw": "not-installed",
+      "factory": "not-installed",
+      "devin": "not-installed",
+      "antigravity": "not-installed",
+      "goose": "not-installed"
+    },
+    "Notification": {
+      "claude": "observe",
+      "codex": "not-installed",
+      "copilot": "observe",
+      "cursor": "not-installed",
+      "opencode": "not-installed",
+      "pi": "not-installed",
+      "hermes": "not-installed",
+      "openclaw": "not-installed",
+      "factory": "observe",
+      "devin": "not-installed",
+      "antigravity": "not-installed",
+      "goose": "not-installed"
+    },
+    "SubagentStart": {
+      "claude": "observe",
+      "codex": "observe",
+      "copilot": "not-installed",
+      "cursor": "not-installed",
+      "opencode": "not-installed",
+      "pi": "not-installed",
+      "hermes": "not-installed",
+      "openclaw": "not-installed",
+      "factory": "not-installed",
+      "devin": "not-installed",
+      "antigravity": "not-installed",
+      "goose": "not-installed"
+    },
+    "SubagentStop": {
+      "claude": "block",
+      "codex": "block",
+      "copilot": "block",
+      "cursor": "unverified",
+      "opencode": "not-installed",
+      "pi": "not-installed",
+      "hermes": "observe",
+      "openclaw": "observe",
+      "factory": "observe",
+      "devin": "not-installed",
+      "antigravity": "not-installed",
+      "goose": "not-installed"
+    },
+    "TaskCreated": {
+      "claude": "block",
+      "codex": "not-installed",
+      "copilot": "not-installed",
+      "cursor": "not-installed",
+      "opencode": "not-installed",
+      "pi": "not-installed",
+      "hermes": "not-installed",
+      "openclaw": "not-installed",
+      "factory": "not-installed",
+      "devin": "not-installed",
+      "antigravity": "not-installed",
+      "goose": "not-installed"
+    },
+    "TaskCompleted": {
+      "claude": "block",
+      "codex": "not-installed",
+      "copilot": "not-installed",
+      "cursor": "not-installed",
+      "opencode": "not-installed",
+      "pi": "not-installed",
+      "hermes": "not-installed",
+      "openclaw": "not-installed",
+      "factory": "not-installed",
+      "devin": "not-installed",
+      "antigravity": "not-installed",
+      "goose": "not-installed"
+    },
+    "Stop": {
+      "claude": "block",
+      "codex": "block",
+      "copilot": "block",
+      "cursor": "block",
+      "opencode": "unverified",
+      "pi": "observe",
+      "hermes": "not-installed",
+      "openclaw": "block",
+      "factory": "block",
+      "devin": "block",
+      "antigravity": "block",
+      "goose": "not-installed"
+    },
+    "StopFailure": {
+      "claude": "observe",
+      "codex": "not-installed",
+      "copilot": "not-installed",
+      "cursor": "not-installed",
+      "opencode": "not-installed",
+      "pi": "not-installed",
+      "hermes": "not-installed",
+      "openclaw": "not-installed",
+      "factory": "not-installed",
+      "devin": "not-installed",
+      "antigravity": "not-installed",
+      "goose": "not-installed"
+    },
+    "TeammateIdle": {
+      "claude": "block",
+      "codex": "not-installed",
+      "copilot": "not-installed",
+      "cursor": "not-installed",
+      "opencode": "not-installed",
+      "pi": "not-installed",
+      "hermes": "not-installed",
+      "openclaw": "not-installed",
+      "factory": "not-installed",
+      "devin": "not-installed",
+      "antigravity": "not-installed",
+      "goose": "not-installed"
+    },
+    "InstructionsLoaded": {
+      "claude": "observe",
+      "codex": "not-installed",
+      "copilot": "not-installed",
+      "cursor": "not-installed",
+      "opencode": "not-installed",
+      "pi": "not-installed",
+      "hermes": "not-installed",
+      "openclaw": "not-installed",
+      "factory": "not-installed",
+      "devin": "not-installed",
+      "antigravity": "not-installed",
+      "goose": "not-installed"
+    },
+    "ConfigChange": {
+      "claude": "block",
+      "codex": "not-installed",
+      "copilot": "not-installed",
+      "cursor": "not-installed",
+      "opencode": "not-installed",
+      "pi": "not-installed",
+      "hermes": "not-installed",
+      "openclaw": "not-installed",
+      "factory": "not-installed",
+      "devin": "not-installed",
+      "antigravity": "not-installed",
+      "goose": "not-installed"
+    },
+    "CwdChanged": {
+      "claude": "observe",
+      "codex": "not-installed",
+      "copilot": "not-installed",
+      "cursor": "not-installed",
+      "opencode": "not-installed",
+      "pi": "not-installed",
+      "hermes": "not-installed",
+      "openclaw": "not-installed",
+      "factory": "not-installed",
+      "devin": "not-installed",
+      "antigravity": "not-installed",
+      "goose": "not-installed"
+    },
+    "FileChanged": {
+      "claude": "observe",
+      "codex": "not-installed",
+      "copilot": "not-installed",
+      "cursor": "not-installed",
+      "opencode": "not-installed",
+      "pi": "not-installed",
+      "hermes": "not-installed",
+      "openclaw": "not-installed",
+      "factory": "not-installed",
+      "devin": "not-installed",
+      "antigravity": "not-installed",
+      "goose": "not-installed"
+    },
+    "WorktreeCreate": {
+      "claude": "unverified",
+      "codex": "not-installed",
+      "copilot": "not-installed",
+      "cursor": "not-installed",
+      "opencode": "not-installed",
+      "pi": "not-installed",
+      "hermes": "not-installed",
+      "openclaw": "not-installed",
+      "factory": "not-installed",
+      "devin": "not-installed",
+      "antigravity": "not-installed",
+      "goose": "not-installed"
+    },
+    "WorktreeRemove": {
+      "claude": "observe",
+      "codex": "not-installed",
+      "copilot": "not-installed",
+      "cursor": "not-installed",
+      "opencode": "not-installed",
+      "pi": "not-installed",
+      "hermes": "not-installed",
+      "openclaw": "not-installed",
+      "factory": "not-installed",
+      "devin": "not-installed",
+      "antigravity": "not-installed",
+      "goose": "not-installed"
+    },
+    "PreCompact": {
+      "claude": "block",
+      "codex": "observe",
+      "copilot": "observe",
+      "cursor": "not-installed",
+      "opencode": "not-installed",
+      "pi": "not-installed",
+      "hermes": "not-installed",
+      "openclaw": "observe",
+      "factory": "block",
+      "devin": "not-installed",
+      "antigravity": "not-installed",
+      "goose": "not-installed"
+    },
+    "PostCompact": {
+      "claude": "observe",
+      "codex": "observe",
+      "copilot": "not-installed",
+      "cursor": "not-installed",
+      "opencode": "not-installed",
+      "pi": "not-installed",
+      "hermes": "not-installed",
+      "openclaw": "not-installed",
+      "factory": "not-installed",
+      "devin": "not-installed",
+      "antigravity": "not-installed",
+      "goose": "not-installed"
+    },
+    "Elicitation": {
+      "claude": "block",
+      "codex": "not-installed",
+      "copilot": "not-installed",
+      "cursor": "not-installed",
+      "opencode": "not-installed",
+      "pi": "not-installed",
+      "hermes": "not-installed",
+      "openclaw": "not-installed",
+      "factory": "not-installed",
+      "devin": "not-installed",
+      "antigravity": "not-installed",
+      "goose": "not-installed"
+    },
+    "ElicitationResult": {
+      "claude": "block",
+      "codex": "not-installed",
+      "copilot": "not-installed",
+      "cursor": "not-installed",
+      "opencode": "not-installed",
+      "pi": "not-installed",
+      "hermes": "not-installed",
+      "openclaw": "not-installed",
+      "factory": "not-installed",
+      "devin": "not-installed",
+      "antigravity": "not-installed",
+      "goose": "not-installed"
+    },
+    "UserPromptExpansion": {
+      "claude": "block",
+      "codex": "not-installed",
+      "copilot": "not-installed",
+      "cursor": "not-installed",
+      "opencode": "not-installed",
+      "pi": "not-installed",
+      "hermes": "not-installed",
+      "openclaw": "not-installed",
+      "factory": "not-installed",
+      "devin": "not-installed",
+      "antigravity": "not-installed",
+      "goose": "not-installed"
+    },
+    "PostToolBatch": {
+      "claude": "block",
+      "codex": "not-installed",
+      "copilot": "not-installed",
+      "cursor": "not-installed",
+      "opencode": "not-installed",
+      "pi": "not-installed",
+      "hermes": "not-installed",
+      "openclaw": "not-installed",
+      "factory": "not-installed",
+      "devin": "not-installed",
+      "antigravity": "not-installed",
+      "goose": "not-installed"
+    },
+    "Setup": {
+      "claude": "observe",
+      "codex": "not-installed",
+      "copilot": "not-installed",
+      "cursor": "not-installed",
+      "opencode": "not-installed",
+      "pi": "not-installed",
+      "hermes": "not-installed",
+      "openclaw": "not-installed",
+      "factory": "not-installed",
+      "devin": "not-installed",
+      "antigravity": "not-installed",
+      "goose": "not-installed"
+    }
+  }
+}

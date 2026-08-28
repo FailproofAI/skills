@@ -7,9 +7,9 @@ description: |-
   • decide what to score — plan which dimensions to track, grounded in what real sessions show; may stop at a written plan without building anything;
   • build or change an evaluator — scaffold the scoring service, add a dimension, score with rules or an LLM judge, test it against a real captured session, deploy it and confirm scores land.
 
-  Served by the `agenteye-evaluator` Python SDK, with the `agenteye` CLI supplying real session data to design against.
+  Served by the `agenteye-evaluator` Python SDK, with the `fp` CLI supplying real session data to design against.
 
-  NOT for reading eval results that already exist or checking whether quality dropped (that's `agenteye-cli` — `agenteye evals`), instrumenting an agent with the AgentEye SDK (that's `agenteye-python-sdk`), or alerting on scores.
+  NOT for reading eval results that already exist or checking whether quality dropped (that's `fp-cloud-cli` — `fp evals`), instrumenting an agent with the FailproofAI SDK (that's `failproofai-sdk`), or alerting on scores.
 ---
 
 # AgentEye Evaluator
@@ -23,7 +23,7 @@ run the service, AgentEye calls it.
 agent run ends (agent_end event)
   → AgentEye server POSTs the full transcript to YOUR service
   → you return {"scores": {"helpfulness": 0.9, ...}}
-  → scores land in the evaluations table → visible in the dashboard and `agenteye evals`
+  → scores land in the evaluations table → visible in the dashboard and `fp evals`
 ```
 
 The SDK part of this is small — a decorator and two models. **The hard part is
@@ -316,13 +316,13 @@ Then restart the server. Notes worth knowing before you debug:
 Scores landing is the only proof. After deploying, finish a session and check:
 
 ```bash
-agenteye --json evals --session-id <id>     # your scores, or status=error/timeout
-agenteye --json evals --aggregate --since 24h
+fp --json evals --session-id <id>     # your scores, or status=error/timeout
+fp --json evals --aggregate --since 24h
 ```
 
 If a session shows `status: error` or `timeout`, the `error` field carries your
 message (the one from the error dict — exceptions never reach it). Reading
-existing scores from here on is the `agenteye-cli` skill's job.
+existing scores from here on is the `fp-cloud-cli` skill's job.
 
 **Debug order when nothing appears:** is `EVALUATOR_ENDPOINT` set on the server →
 did the session emit `agent_end` (or does `@app.config` return

@@ -19,6 +19,10 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const OUT = resolve(HERE, "..", "references", "builtins.md");
+// Machine-readable twin: policy name -> the events it matches on. Consumed by
+// attribute-findings.mjs, which has to answer "can this finding's policy even
+// fire on the harness the hits came from?" and cannot parse that out of prose.
+const OUT_JSON = resolve(HERE, "policy-events.json");
 const check = process.argv.includes("--check");
 
 /**
@@ -143,16 +147,43 @@ lines.push("");
 
 const generated = lines.join("\n");
 
+const eventsJson =
+  JSON.stringify(
+    {
+      _generated: "sync-builtins.mjs — do not hand-edit",
+      policies: Object.fromEntries(
+        [...BUILTIN_POLICIES]
+          .sort((a, b) => a.name.localeCompare(b.name))
+          .map((p) => [
+            p.name,
+            {
+              events: p.match?.events ?? [],
+              toolNames: p.match?.toolNames ?? null,
+              defaultEnabled: p.defaultEnabled === true,
+              alwaysOn: p.alwaysOn === true,
+            },
+          ]),
+      ),
+    },
+    null,
+    2,
+  ) + "\n";
+
 if (check) {
-  const current = existsSync(OUT) ? readFileSync(OUT, "utf8") : "";
-  if (current !== generated) {
-    console.error("references/builtins.md is OUT OF DATE.");
+  const stale = [
+    [OUT, generated, "references/builtins.md"],
+    [OUT_JSON, eventsJson, "scripts/policy-events.json"],
+  ].filter(([path, want]) => (existsSync(path) ? readFileSync(path, "utf8") : "") !== want);
+  if (stale.length) {
+    console.error(`${stale.map(([, , label]) => label).join(" and ")} OUT OF DATE.`);
     console.error(`Registry has ${BUILTIN_POLICIES.length} builtins. Run: bun ${process.argv[1]}`);
     process.exit(1);
   }
-  console.log(`references/builtins.md is current (${BUILTIN_POLICIES.length} builtins).`);
+  console.log(`builtins.md and policy-events.json are current (${BUILTIN_POLICIES.length} builtins).`);
   process.exit(0);
 }
 
 writeFileSync(OUT, generated);
+writeFileSync(OUT_JSON, eventsJson);
 console.log(`Wrote ${OUT} — ${BUILTIN_POLICIES.length} builtins across ${byCategory.size} categories.`);
+console.log(`Wrote ${OUT_JSON} — events for ${BUILTIN_POLICIES.length} policies.`);

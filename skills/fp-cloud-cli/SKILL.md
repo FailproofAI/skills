@@ -1,48 +1,91 @@
 ---
-name: agenteye-cli
+name: fp-cloud-cli
 description: |-
   The way to answer "how are my production AI agents doing?" and to run the team's agent-observability deployment — reach for it even on casual phrasing that names no tool.
 
   Trigger when the user wants to:
   • inspect agent telemetry — did agents error/fail/go flaky; sessions, events, latency, token usage, slowest models; eval/quality scores and whether quality dropped;
-  • operate the deployment — ack/assign/resolve/mute/dismiss issues (alerts, reports, and audit findings) with notes; run and triage audits; see who has access and change roles (e.g. read-only); create or scope API keys (e.g. a push-only CI key); change settings; run saved or ad-hoc ClickHouse queries.
+  • operate the deployment — triage issues and audits; manage access, keys, settings, and queries;
+  • manage Cloud enforcement — compose/test/publish policy versions, deploy them to fleet machines, inspect guardrails, promote, or roll back.
 
-  Served by the `agenteye` CLI against an AgentEye platform.
+  Served by the `fp` CLI against FailproofAI Cloud.
 
-  NOT for writing or designing an evaluator service / scoring logic (that's `agenteye-evaluator`), adding SDK/instrumentation to your app (that's `agenteye-python-sdk`), debugging the collector/daemon, or unrelated dev work (why a build/CI run failed, rotating non-AgentEye secrets).
+  NOT for publishing reusable GitHub policy packs (`failproofai-policy-publish`), evaluator scoring (`agenteye-evaluator`), instrumenting an app (`failproofai-sdk`), or debugging the local collector/daemon.
 ---
 
-# AgentEye CLI
+# FailproofAI Cloud CLI
 
-`agenteye` is a command-line client for an AgentEye deployment. It talks only to
-the dashboard `/api/*` over an authenticated session — you never hit the backend
-directly. Every command takes `--json`, so it's built to be driven by an agent.
+`fp` is a command-line client for a FailproofAI Cloud deployment. It authenticates
+either as a signed-in **user** or with a scoped **API key** (§2), and every command
+takes `--json`, so it's built to be driven by an agent.
 
 ## 1. Find how to invoke it
 
 Resolve this once, then reuse it for every call:
 
-1. If `agenteye` is on `PATH` (`command -v agenteye`) → use **`agenteye`** (it's
+1. If `fp` is on `PATH` (`command -v fp`) → use **`fp`** (it's
    installed via pipx / uv tool / pip). This is the normal case.
-2. Else, if you're in (or under) a repo with a `cli/` directory containing the
-   `agenteye` package → run it from there with **`uv run agenteye`** (a local dev
+2. Else, if you're in (or under) a repo with an `fp-cloud-cli/` directory containing the
+   `fp_cli` package → run it from there with **`uv run fp`** (a local dev
    build). The first run after a code change prints `Building…`/`Installed…` on
    stderr — that's `uv`, not CLI output; ignore it.
 3. Else the CLI isn't available here → tell the user to install it
-   (`pipx install agenteye` or `uv tool install agenteye`) and stop. Don't try to
+   (`pipx install fp-cloud-cli` or `uv tool install fp-cloud-cli`) and stop. Don't try to
    reach the dashboard another way.
 
 Don't go spelunking in the CLI source tree for flags — if you're unsure of one,
-run `agenteye <group> <cmd> --help`. The source is not the documented contract
+run `fp <group> <cmd> --help`. The source is not the documented contract
 and reading it wastes effort.
 
-Throughout this skill, `agenteye` means "whichever form you resolved."
+Throughout this skill, `fp` means "whichever form you resolved."
 
 ## 2. The contract (the CLI enforces it, work with it, don't fight it)
 
-- **Global options go BEFORE the command:** `agenteye --json events`, never
-  `agenteye events --json`. Globals are `--base-url`, `--org`, `--token`,
-  `--json`, `--insecure`/`--secure`. After the command they're a usage error.
+- **Global options go BEFORE the command:** `fp --json events`, never
+  `fp events --json`. Globals are `--base-url`, `--org`, `--token`,
+  `--api-key`, `--json`, `--insecure`/`--secure`. After the command they're a
+  usage error.
+- **Two ways to authenticate, and they are not interchangeable:**
+
+  | | How you supply it | What it is |
+  |---|---|---|
+  | **Session** | `fp login` (interactive; it emails a one-time code) | a signed-in **user**, carrying that person's org memberships and permissions |
+  | **API key** | `--api-key <key>`, or `FP_API_KEY` in the environment | a scoped **credential**, carrying exactly the permissions it was granted |
+
+  A key is what you want in CI or any other non-interactive context: no browser, no
+  emailed code, nothing to expire mid-run.
+
+  **Credential precedence, in full** (`resolve_auth`, `fp_cli/_context.py`). Read it
+  as a ladder — the first rung that applies wins, and an explicit flag outranks
+  *every* environment variable, not just its own:
+
+  0. `--api-key` **and** `--token` together → usage error, exit 2. A silent guess
+     about which you meant is the one outcome worth refusing.
+  1. `--api-key <key>` → key mode
+  2. `--token <tok>` → session mode. **This beats an ambient `FP_API_KEY`** — the
+     flag is checked before the environment value, so "`FP_API_KEY` wins" is only
+     true between the two env vars.
+  3. `FP_API_KEY` → key mode
+  4. `FP_TOKEN` → session mode
+  5. the saved session from `fp login` → session mode
+
+  The rung that catches people is 2: exporting `FP_API_KEY` in CI and *also*
+  passing `--token` runs as that user's saved session, with their org memberships,
+  rather than under the scoped key you meant to audit.
+
+  **A key is never written to the CLI's saved config** — pass it every time, from
+  the environment. `--api-key ""` means "no override" and does **not** fall back to
+  a saved session (Click treats an empty env var as unset, so it falls to rung 4).
+
+- **Some commands need a signed-in user.** `login`, `logout`, `orgs *`, the whole
+  `agent` group, `keys update`, and all of `policies *` / `fleet *` /
+  `guardrails *` refuse a key with a usage error (**exit 2**) and make **no
+  network call at all** — there is no user to sign in, no saved active org to
+  switch, no private assistant thread to own, and the enforcement write routes
+  are root-only and deliberately absent from `/v1`. `keys update` is in that list
+  rather than a special case: `keys:update` can never be granted to a key, so it
+  is refused up front like the rest. The key is not the problem to fix — plan
+  around them rather than retrying or hunting for a flag.
 - **Default to `--json` and parse it.** It prints clean JSON to stdout and
   nothing else. The plain output is a boxed Rich UI meant for human eyes — it
   burns context with box-drawing characters and is awkward to parse. Use the
@@ -57,30 +100,49 @@ Throughout this skill, `agenteye` means "whichever form you resolved."
   | 1 | unexpected / server error | report it to the user |
   | 2 | usage error (bad flags/args) | fix the command and retry |
   | 3 | can't reach the dashboard | check base-url / connectivity |
-  | 4 | not signed in / session expired | user must run `agenteye login` |
+  | 4 | no usable credential — not signed in, session expired, **or the API key was rejected** | session: user must run `fp login`. Key: it's missing, mistyped, disabled, or belongs to another deployment — don't retry, and don't fall back to a session |
   | 5 | authenticated but missing permission | message names the exact permission |
   | 6 | resource not found | the named resource doesn't exist |
 
 ## 3. First call: confirm you're connected
 
-Before real work, run `agenteye --json whoami` and react to the exit code:
+Before real work, run `fp --json whoami` and react to the exit code:
 
-- **exit 4** → not signed in. Tell the user to run `agenteye login` (it emails a
-  one-time code and prompts interactively — you can't complete it for them, and
-  don't fabricate a token).
+- **exit 4** → no usable credential. If the user is working from a session, tell
+  them to run `fp login` (it emails a one-time code and prompts
+  interactively — you can't complete it for them, and don't fabricate a token).
+  If a key was supplied, the key itself was rejected — say so and stop; logging in
+  is not the fix, and silently switching to a session would run the command as a
+  different identity than the user asked for.
 - **base-url** → the CLI defaults to the hosted product,
-  `https://app.befailproof.ai`, so a plain `agenteye login` works out of the box.
-  Only pass `--base-url <url>` (or set `AGENTEYE_DASHBOARD_URL`) for a self-hosted
+  `https://app.befailproof.ai`, so a plain `fp login` works out of the box.
+  Only pass `--base-url <url>` (or set `FP_DASHBOARD_URL`) for a self-hosted
   or dev deployment — a local dev stack is usually `http://localhost:3000`. A
   scheme-less URL is rejected as a usage error (exit 2).
 - **exit 0** → `whoami` returns the active org slug and your permissions; trust
   that for the org name and to know what you're allowed to do before attempting a
   gated command (don't assume a particular org slug — read it from `whoami`).
+- **In key mode, `whoami` answers a different question.** It still exits 0 —
+  `whoami` never errors — but it reports *how* you are authenticated rather than
+  *who* you are: there is no signed-in user, so it says so and names the auth mode
+  and the org it will act on. Read the auth mode; don't read "no user" as "not
+  authenticated" and don't try to log in on the strength of it. Since it isn't a
+  permission check either, let your first real read (`fp --json list envs`)
+  be what confirms the key works.
 
 **Multi-tenant:** a user can belong to several orgs; the active one is chosen at
 login. Override for a single command with the global `--org <slug>`
-(`agenteye --org acme sessions`); change the saved default with
-`agenteye orgs switch <slug>`.
+(`fp --org acme sessions`); change the saved default with
+`fp orgs switch <slug>`.
+
+> ⚠️ **With a key, name the org explicitly.** A key bound to one organization only
+> ever acts on that one. But a key that is **not** bound to a single organization
+> has nothing to fall back on — key mode never reads a saved active org — so the
+> deployment resolves it to its own default, and you get **that** org's data: no
+> error, no warning, results that look perfectly valid. If you cannot tell which
+> kind of key you hold, pass `--org <slug>` (or set `FP_ORG`) on every
+> command. Naming the org the key already belongs to is a no-op, and naming the
+> wrong one fails loudly instead of quietly — both better than guessing.
 
 ## 4. Mutations: confirm with the user FIRST
 
@@ -106,7 +168,11 @@ State-changing commands: `keys create/update/disable/regenerate`,
 (`ack/assign/resolve/comment-add/comment-delete/subscribe/unsubscribe/open`),
 `audits create/edit/delete/run` and the finding-triage verbs
 (`ack/mute/dismiss/resolve/reopen/assign`),
-`query create/update/delete`, `agent rename/delete`, and `orgs switch`.
+`query create/update/delete`, `agent rename/delete`, `orgs switch`, and — the
+highest-consequence of the lot — `policies publish/enable/disable/delete` and
+`fleet deploy/rollback/rename`, which change what is ENFORCED on production
+machines. A `fleet deploy` replaces a machine's entire policy set, so name the
+policies being dropped, not just the ones being added.
 Read-only commands (§5 "Observe") never need this.
 
 ## 5. Command map
@@ -130,11 +196,19 @@ you need a flag you don't already know.
 - `issues list|count|show|ack|assign|resolve|comment-add|comment-list|comment-delete|subscribe|subscribers|unsubscribe|open` — by id (short ids accepted). **One board for everything needing attention**: alert breaches, hand-raised issues, and audit findings, told apart by a `source` of `alert` / `manual` / `audit`. (This group was called `incidents` before; the old name is gone.)
 - `audits list|show|create|edit|delete|run|runs` — scheduled sweeps, referenced by **name**; `audits findings|finding` + the triage verbs `ack|mute|dismiss|resolve|reopen|assign` act on a finding **id**. `audits run <name>` only *queues* a run (poll `audits runs <name>` for completion). See §8.
 
+**Enforce (cloud-managed policy, session-only — see §2):**
+- `policies list|show|publish|enable|disable|delete|test|compose` — policy versions. `publish` mints a version from a local `.mjs`; `test` runs one against a synthetic context locally (it applies each policy's `match` filter, so a policy that does not cover the `--event`/`--tool` you pass is reported `skipped`, not run). `enable`/`disable`/`delete` take `--yes`.
+- `fleet list|show|deploy|diff|history|rollback|rename` — which machines run which policies. **`deploy` REPLACES a machine's whole set** (`--add`/`--remove` amend it, `--set` replaces, `--create` mints a deployment); it prints the plan and asks **only on an interactive terminal without `--json`** — under `--json` or with stdin redirected it applies immediately, so read `fleet show` first if you want review.
+- `guardrails summary|timeline` — what enforcement actually did; `--since 1h|6h|24h|7d`, `--machine`.
+
 **Analytics & assistant:**
 - `query list|show|create|update|delete|run|schema` — saved ClickHouse SQL + ad-hoc runner (`query run <name>` or `query run --sql "…"`); `query schema [table]` for table layout.
 - `agent health|models|chats|ask|show|rename|delete` — built-in assistant; `agent ask "…"` starts a chat, `--chat <short-id>` continues one.
 
 **Identity:** `login`, `logout`, `whoami`, `orgs {list,switch,current,perms}`, `version`, `help`.
+All of `login` / `logout` / `orgs` — like the whole `agent` group, `keys update`, and
+every `policies` / `fleet` / `guardrails` subcommand — are **session-only**: with a key
+they exit 2 without calling anything (§2). `whoami`, `version` and `help` work either way.
 
 ## 6. Translating plain-English requests
 
@@ -169,18 +243,18 @@ guessing.
 Discover → filter → read JSON → answer in prose:
 
 ```bash
-agenteye --json list agents                                       # find valid agent ids
-agenteye --json errors --since 24h --aggregate                    # how bad is it right now? (full-window totals)
-agenteye --json errors --since 24h --all --limit 1000 | jq '.errors[] | {session_id, error_type}'
-agenteye --json sessions --status error --since 7d --all --limit 1000   # which runs failed
-agenteye --json events --session-id run-001 --all --limit 1000    # a run's timeline (light: summaries, no payload)
-agenteye --json events --full --session-id run-001 --all | jq '.events[].payload'   # that run's RAW payloads (--full, bounded)
+fp --json list agents                                       # find valid agent ids
+fp --json errors --since 24h --aggregate                    # how bad is it right now? (full-window totals)
+fp --json errors --since 24h --all --limit 1000 | jq '.errors[] | {session_id, error_type}'
+fp --json sessions --status error --since 7d --all --limit 1000   # which runs failed
+fp --json events --session-id run-001 --all --limit 1000    # a run's timeline (light: summaries, no payload)
+fp --json events --full --session-id run-001 --all | jq '.events[].payload'   # that run's RAW payloads (--full, bounded)
 ```
 
 - **Raw `payload` is opt-in** — `events`/`errors` responses are payload-free by default; add
   `--full` (or `--fields payload`) to get it, and **always bound it to a `--session-id`**
   (the full feed is slow/OOM-prone at scale). For one event or a precise slice, read the
-  column directly: `agenteye --json query run --sql "SELECT payload FROM events WHERE id = <id>"`
+  column directly: `fp --json query run --sql "SELECT payload FROM events WHERE id = <id>"`
   (or `WHERE session_id = '<id>'`). See `references/commands.md` → "Getting the raw payload".
 
 - **`list <kind>` before filtering** — don't guess an env or agent id; the

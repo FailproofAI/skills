@@ -61,22 +61,35 @@ metadata:
 
 ## Synced skills (don't hand-edit these)
 
-Some skills are **mirrored from another repo** and must not be edited here —
+Three skills are **mirrored from another repo** and must not be edited here —
 edits would be overwritten on the next sync. Their source of truth is listed in
 the README "Skills" table.
 
-Each one is a straight one-folder overwrite out of `FailproofAI/agenteye`
-(private), published by a manual workflow there:
+Each one is a straight one-folder overwrite, published by a manual workflow in
+the upstream repo. **Two upstreams, not one** — the CLI and Python SDK moved to
+`FailproofAI/failproofai` with the product rename; the evaluator did not:
 
 ```
-agenteye:cli/skill/            ──▶  skills/agenteye-cli/         (workflow: Sync agenteye-cli skill)
-agenteye:evaluator-sdk/skill/  ──▶  skills/agenteye-evaluator/   (workflow: Sync agenteye-evaluator skill)
-agenteye:python-sdk/skill/     ──▶  skills/agenteye-python-sdk/  (workflow: Sync agenteye-python-sdk skill)
+failproofai:fp-cloud-cli/skill/  ──▶  skills/fp-cloud-cli/        (workflow: Sync fp-cloud-cli skill)
+failproofai:sdk/python/skill/    ──▶  skills/failproofai-sdk/     (workflow: Sync failproofai-sdk skill)
+agenteye:evaluator-sdk/skill/    ──▶  skills/agenteye-evaluator/  (workflow: Sync agenteye-evaluator skill)
 ```
 
-To change one, edit the source folder in agenteye and re-run its workflow from
-agenteye `main`. Each workflow rebuilds its own `sync/<skill>` branch off the
+`FailproofAI/agenteye` is private; you need push access to the upstream repo to
+re-run any of these workflows.
+
+`agenteye-evaluator` is **not** a stale name. It is what the skill, the
+distribution (`agenteye-evaluator`) and the module (`agenteye_evaluator`) are
+still called upstream — renaming it here breaks the sync.
+
+To change one, edit the source folder upstream and re-run its workflow from that
+repo's `main`. Each workflow rebuilds its own `sync/<skill>` branch off the
 latest `main` here and **force-pushes** it, refreshing one long-lived PR. So on
 top of not hand-editing the mirrored folder: don't add your own commits to a
 `sync/*` branch either — the next run discards them without warning. Changes
 outside the mirrored folder (a README row, this file) go in a normal PR.
+
+Everything else under `skills/` — `failproofai`, `failproofai-policy-author`,
+`failproofai-policy-publish` — is maintained here and
+edited normally. If a mirror is wrong, fix it upstream or carry the correction in
+one of those three; never patch the mirror in place.

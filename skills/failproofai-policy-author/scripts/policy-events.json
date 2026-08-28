@@ -1,0 +1,379 @@
+{
+  "_generated": "sync-builtins.mjs — do not hand-edit",
+  "policies": {
+    "block-aws-cli": {
+      "events": [
+        "PreToolUse"
+      ],
+      "toolNames": [
+        "Bash"
+      ],
+      "defaultEnabled": false,
+      "alwaysOn": false
+    },
+    "block-az-cli": {
+      "events": [
+        "PreToolUse"
+      ],
+      "toolNames": [
+        "Bash"
+      ],
+      "defaultEnabled": false,
+      "alwaysOn": false
+    },
+    "block-curl-pipe-sh": {
+      "events": [
+        "PreToolUse"
+      ],
+      "toolNames": [
+        "Bash"
+      ],
+      "defaultEnabled": true,
+      "alwaysOn": false
+    },
+    "block-env-files": {
+      "events": [
+        "PreToolUse"
+      ],
+      "toolNames": null,
+      "defaultEnabled": true,
+      "alwaysOn": false
+    },
+    "block-failproofai-commands": {
+      "events": [
+        "PreToolUse",
+        "PermissionRequest"
+      ],
+      "toolNames": [
+        "Bash",
+        "Write",
+        "Edit",
+        "NotebookEdit"
+      ],
+      "defaultEnabled": true,
+      "alwaysOn": true
+    },
+    "block-force-push": {
+      "events": [
+        "PreToolUse"
+      ],
+      "toolNames": [
+        "Bash"
+      ],
+      "defaultEnabled": false,
+      "alwaysOn": false
+    },
+    "block-gcloud": {
+      "events": [
+        "PreToolUse"
+      ],
+      "toolNames": [
+        "Bash"
+      ],
+      "defaultEnabled": false,
+      "alwaysOn": false
+    },
+    "block-gh-pipeline": {
+      "events": [
+        "PreToolUse"
+      ],
+      "toolNames": [
+        "Bash"
+      ],
+      "defaultEnabled": false,
+      "alwaysOn": false
+    },
+    "block-helm": {
+      "events": [
+        "PreToolUse"
+      ],
+      "toolNames": [
+        "Bash"
+      ],
+      "defaultEnabled": false,
+      "alwaysOn": false
+    },
+    "block-kubectl": {
+      "events": [
+        "PreToolUse"
+      ],
+      "toolNames": [
+        "Bash"
+      ],
+      "defaultEnabled": false,
+      "alwaysOn": false
+    },
+    "block-push-master": {
+      "events": [
+        "PreToolUse"
+      ],
+      "toolNames": [
+        "Bash"
+      ],
+      "defaultEnabled": true,
+      "alwaysOn": false
+    },
+    "block-read-outside-cwd": {
+      "events": [
+        "PreToolUse"
+      ],
+      "toolNames": [
+        "Read",
+        "Glob",
+        "Grep",
+        "Bash"
+      ],
+      "defaultEnabled": false,
+      "alwaysOn": false
+    },
+    "block-rm-rf": {
+      "events": [
+        "PreToolUse"
+      ],
+      "toolNames": [
+        "Bash"
+      ],
+      "defaultEnabled": false,
+      "alwaysOn": false
+    },
+    "block-secrets-write": {
+      "events": [
+        "PreToolUse"
+      ],
+      "toolNames": [
+        "Write"
+      ],
+      "defaultEnabled": false,
+      "alwaysOn": false
+    },
+    "block-sudo": {
+      "events": [
+        "PreToolUse",
+        "PermissionRequest"
+      ],
+      "toolNames": [
+        "Bash"
+      ],
+      "defaultEnabled": true,
+      "alwaysOn": false
+    },
+    "block-terraform": {
+      "events": [
+        "PreToolUse"
+      ],
+      "toolNames": [
+        "Bash"
+      ],
+      "defaultEnabled": false,
+      "alwaysOn": false
+    },
+    "block-work-on-main": {
+      "events": [
+        "PreToolUse"
+      ],
+      "toolNames": [
+        "Bash"
+      ],
+      "defaultEnabled": false,
+      "alwaysOn": false
+    },
+    "prefer-package-manager": {
+      "events": [
+        "PreToolUse"
+      ],
+      "toolNames": [
+        "Bash"
+      ],
+      "defaultEnabled": false,
+      "alwaysOn": false
+    },
+    "protect-env-vars": {
+      "events": [
+        "PreToolUse"
+      ],
+      "toolNames": [
+        "Bash"
+      ],
+      "defaultEnabled": true,
+      "alwaysOn": false
+    },
+    "require-ci-green-before-stop": {
+      "events": [
+        "Stop"
+      ],
+      "toolNames": null,
+      "defaultEnabled": false,
+      "alwaysOn": false
+    },
+    "require-commit-before-stop": {
+      "events": [
+        "Stop"
+      ],
+      "toolNames": null,
+      "defaultEnabled": false,
+      "alwaysOn": false
+    },
+    "require-no-conflicts-before-stop": {
+      "events": [
+        "Stop"
+      ],
+      "toolNames": null,
+      "defaultEnabled": false,
+      "alwaysOn": false
+    },
+    "require-pr-before-stop": {
+      "events": [
+        "Stop"
+      ],
+      "toolNames": null,
+      "defaultEnabled": false,
+      "alwaysOn": false
+    },
+    "require-push-before-stop": {
+      "events": [
+        "Stop"
+      ],
+      "toolNames": null,
+      "defaultEnabled": false,
+      "alwaysOn": false
+    },
+    "sanitize-api-keys": {
+      "events": [
+        "PostToolUse"
+      ],
+      "toolNames": null,
+      "defaultEnabled": true,
+      "alwaysOn": false
+    },
+    "sanitize-bearer-tokens": {
+      "events": [
+        "PostToolUse"
+      ],
+      "toolNames": null,
+      "defaultEnabled": true,
+      "alwaysOn": false
+    },
+    "sanitize-connection-strings": {
+      "events": [
+        "PostToolUse"
+      ],
+      "toolNames": null,
+      "defaultEnabled": true,
+      "alwaysOn": false
+    },
+    "sanitize-jwt": {
+      "events": [
+        "PostToolUse"
+      ],
+      "toolNames": null,
+      "defaultEnabled": true,
+      "alwaysOn": false
+    },
+    "sanitize-private-key-content": {
+      "events": [
+        "PostToolUse"
+      ],
+      "toolNames": null,
+      "defaultEnabled": true,
+      "alwaysOn": false
+    },
+    "warn-all-files-staged": {
+      "events": [
+        "PreToolUse"
+      ],
+      "toolNames": [
+        "Bash"
+      ],
+      "defaultEnabled": false,
+      "alwaysOn": false
+    },
+    "warn-background-process": {
+      "events": [
+        "PreToolUse"
+      ],
+      "toolNames": [
+        "Bash"
+      ],
+      "defaultEnabled": false,
+      "alwaysOn": false
+    },
+    "warn-destructive-sql": {
+      "events": [
+        "PreToolUse"
+      ],
+      "toolNames": [
+        "Bash"
+      ],
+      "defaultEnabled": false,
+      "alwaysOn": false
+    },
+    "warn-git-amend": {
+      "events": [
+        "PreToolUse"
+      ],
+      "toolNames": [
+        "Bash"
+      ],
+      "defaultEnabled": false,
+      "alwaysOn": false
+    },
+    "warn-git-stash-drop": {
+      "events": [
+        "PreToolUse"
+      ],
+      "toolNames": [
+        "Bash"
+      ],
+      "defaultEnabled": false,
+      "alwaysOn": false
+    },
+    "warn-global-package-install": {
+      "events": [
+        "PreToolUse"
+      ],
+      "toolNames": [
+        "Bash"
+      ],
+      "defaultEnabled": false,
+      "alwaysOn": false
+    },
+    "warn-large-file-write": {
+      "events": [
+        "PreToolUse"
+      ],
+      "toolNames": [
+        "Write"
+      ],
+      "defaultEnabled": false,
+      "alwaysOn": false
+    },
+    "warn-package-publish": {
+      "events": [
+        "PreToolUse"
+      ],
+      "toolNames": [
+        "Bash"
+      ],
+      "defaultEnabled": false,
+      "alwaysOn": false
+    },
+    "warn-repeated-tool-calls": {
+      "events": [
+        "PreToolUse"
+      ],
+      "toolNames": null,
+      "defaultEnabled": false,
+      "alwaysOn": false
+    },
+    "warn-schema-alteration": {
+      "events": [
+        "PreToolUse"
+      ],
+      "toolNames": [
+        "Bash"
+      ],
+      "defaultEnabled": false,
+      "alwaysOn": false
+    }
+  }
+}
