@@ -12,7 +12,7 @@ description: |-
 
   Served by the `failproofai` CLI.
 
-  NOT for publishing a finished policy pack to GitHub (`failproofai-policy-publish`); nor Cloud-managed policy versions, fleet rollout, telemetry, or org operations (`fp-cloud-cli`), evaluator scoring (`agenteye-evaluator`), or repo invariants that belong in tests.
+  NOT for publishing a finished policy pack to GitHub (`failproofai-policy-publish`); nor Cloud-managed policy versions, fleet rollout, telemetry, or org operations (`fp-cloud-cli`), what to evaluate (`failproofai-eval-brainstorm`), or repo invariants that belong in tests.
 ---
 
 # failproofai Policies

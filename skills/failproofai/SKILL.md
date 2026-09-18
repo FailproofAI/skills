@@ -10,7 +10,7 @@ description: |-
   • find the right surface — audits, sessions, policies, keys and orgs, fleet deploys, self-hosting;
   • fix a live machine — a stopped daemon, a session that never lands, a dead hook.
 
-  It can stand alone. When focused sibling skills are installed, route policy authoring to `failproofai-policy-author`, pack publishing to `failproofai-policy-publish`, Cloud and fleet work to `fp-cloud-cli`, scoring to `agenteye-evaluator`, and instrumentation to `failproofai-sdk`.
+  It can stand alone. When focused sibling skills are installed, route policy authoring to `failproofai-policy-author`, pack publishing to `failproofai-policy-publish`, Cloud and fleet work to `fp-cloud-cli`, eval planning to `failproofai-eval-brainstorm`, and instrumentation to `failproofai-sdk`.
 ---
 
 # FailproofAI
@@ -66,7 +66,7 @@ reach, and an agent that meets one of these needs to know it is the same product
 | `AGENTEYE_HOME`, `~/.agenteye/events` | the **local daemon's** legacy SDK spool, which it still watches |
 | `AGENTEYE_KEY` (collector ingest), `AGENTEYE_API_KEY` (dashboard admin) | ingest credentials. `FP_API_KEY` was named deliberately *not* to collide — never tell anyone to reuse either |
 | `ghcr.io/agenteye-enterprise`, k8s namespace `agenteye`, ClickHouse `agenteye.events` | self-hosted infrastructure |
-| dist `agenteye-evaluator`, module `agenteye_evaluator`, UA `agenteye-server/<version>` | the evaluator package — and the one sibling skill that keeps its name |
+| dist `agenteye-evaluator`, module `agenteye_evaluator`, UA `agenteye-server/<version>` | the RETIRED v1 evaluator package. Scoring is Evaluator v2 now: author a hosted evaluation in the dashboard, or run a worker on `failproofai-sdk` |
 | `incidents:read`/`:write`/`:ack`, `alerts:ack`, the `INCIDENT_ID` positional on `issues show` | retired grants and arguments the server still parses |
 
 **The env prefix follows the binary.** `fp` reads `FP_HOME`, `FP_JSON`, `FP_TOKEN`,
@@ -96,10 +96,12 @@ fork wrong wastes the most time of anything in this product.
 
 ## Route first
 
-Read this before doing any work. Three of the specialists — `fp-cloud-cli`, `failproofai-sdk`
-and `agenteye-evaluator` — are mirrors, synced from a private repo and marked do-not-hand-edit;
-duplicating or patching them here is a maintenance bug. Two of the three were renamed with the
-product; the evaluator was not, and `agenteye-evaluator` is its real current name.
+Read this before doing any work. Two of the specialists — `fp-cloud-cli` and `failproofai-sdk`
+— are mirrors, synced from a private repo and marked do-not-hand-edit; duplicating or patching
+them here is a maintenance bug. `failproofai-eval-brainstorm` is a mirror too, and answers the
+question the retired `agenteye-evaluator` skill used to: **what is worth measuring**. It stops at
+the proposal — the dashboard's eval authoring page composes, backtests and deploys the
+evaluation itself, so nothing here scaffolds an evaluator service any more.
 
 | The request is | Go to |
 |---|---|
@@ -107,7 +109,7 @@ product; the evaluator was not, and `agenteye-evaluator` is its real current nam
 | Publish tested policies as a GitHub pack others can install | **`failproofai-policy-publish`** |
 | Publish a Cloud policy version, deploy it to fleet machines, observe, enforce, or roll back | **`fp-cloud-cli`** |
 | Query FailproofAI Cloud — browse sessions, events, errors, evals; triage issues/alerts; manage keys, users, roles, settings | **`fp-cloud-cli`** (the cloud CLI skill) |
-| Decide what to score, or build/extend an evaluator service | **`agenteye-evaluator`** |
+| Decide what to score — which dimensions are worth tracking, grounded in real sessions | **`failproofai-eval-brainstorm`** |
 | Instrument an agent that is **not** one of the 12 supported CLIs — a Python/LangChain/custom loop | **`failproofai-sdk`** |
 | Every surface at once — product architecture, commands, terminology, setup, and skill selection | **stay here** |
 | Anything local-machine: install, connect, daemon, backfill, flush, capture paths, upgrade, uninstall | **stay here** |

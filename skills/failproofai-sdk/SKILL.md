@@ -10,7 +10,7 @@ description: |-
 
   Served by the `failproofai_sdk` Python SDK, inside the user's own agent.
 
-  NOT for reading telemetry that already landed or operating a deployment (that's `fp-cloud-cli`), or building the evaluator service that scores runs (that's `agenteye-evaluator`).
+  NOT for reading telemetry that already landed or operating a deployment (that's `fp-cloud-cli`), or deciding what is worth evaluating (that's `failproofai-eval-brainstorm`).
 ---
 
 # Failproof AI Python SDK
