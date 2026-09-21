@@ -29,6 +29,17 @@ measurement is only meaningful for one agent, one environment, or one stage, wri
 into the sentence — "only for sessions from the `checkout-bot` agent" — and it becomes
 the evaluation's condition.
 
+**5. State the key you agreed.** There is no separate key field either, and the link
+carries nothing but this prose. Leave the key out and the page names the evaluation
+itself — reasonably, but not what the user just signed off on in step 7, and keys are
+permanent in practice. One clause fixes it:
+
+> Use the evaluation key `tool_retry_rate`.
+
+The same goes for the result kind, but by omission rather than statement: the page
+infers score / metric / assertion from property 1's phrasing, so get the phrasing right
+and do not try to declare the kind outright.
+
 ## Specific beats broad
 
 Broad prompts make the model waffle, produce vague code, and can time out outright.

@@ -151,8 +151,15 @@ not a quality signal".
 > people talk themselves out of their best evaluations.
 
 **Keep a running "considered and rejected" list**, each entry carrying the number that
-killed it. It is a deliverable, not waste: it is how the user knows you looked, and why
-the slate is this and not something else.
+killed it, and **put it in your answer** — it is a required part of the output, not a
+note to yourself. It is how the user knows you looked, and why the slate is this one
+and not something else.
+
+Without it a slate is unfalsifiable: three confident proposals read exactly the same
+whether you tested ten candidates or thought of three. **Name at least one thing you
+cut and the number that cut it**, every time. "I checked X; good runs 0.81, bad runs
+0.79 across 40 sessions, so it is not a quality signal" is worth more to the reader
+than a fourth proposal.
 
 ## 7. Converge — 2 to 4, named once
 
@@ -168,12 +175,31 @@ Two limits to hold firm on:
   renaming splits the history and breaks every trend built on it. Agree the exact
   strings now.
 
-## 8. Hand over the prompt
+## 8. Hand over the prompt — and the link, in the same breath
 
 The deliverable for each survivor is **the prompt**, written so the authoring page
 composes cleanly from it on the first try. That has its own craft — the grammar that
 picks the result type, how specific to be, which field names to name outright. See
 `references/writing-the-prompt.md`.
+
+**Then build the link for every proposal, before you write your answer.** As the
+dashboard assistant that is `build_eval_authoring_link`, once per survivor. From a
+machine with `fp` there is no such tool — build it yourself, as `references/cli.md`
+shows. Either way the link goes in the proposal. A proposal without its link is not
+finished — the whole point is that the operator can act on it in one click, and a
+prompt they have to copy, navigate to authoring, and paste is most of the friction
+this exists to remove.
+
+Three things not to do, because each one reads as helpful and lands as a dead end:
+
+- **Do not offer to generate the links.** "Shall I generate the authoring links?" is
+  a round trip that buys nothing — you already know which proposals you are making.
+- **Do not ask which ones they want first.** Build a link for each; they pick by
+  clicking. Choosing is the cheap part for them and the expensive part for you.
+- **Do not write the words "link" or "here are the links" without a link.** Describing
+  a link you did not build is worse than omitting it: it reads as done.
+
+The rule in one line: **if you named a proposal, you built its link.**
 
 ## The proposal format
 
@@ -196,8 +222,15 @@ Each proposal, in full:
 > **Prompt:** "Fraction of a session's tool calls that repeat the previous call's tool
 > name and input exactly. Read `tool_use.tool_name` and `tool_use.input`. 0 when every
 > call is distinct, 1 when every call after the first is a repeat."
+>
+> **Author it:** [/acme/eval-authoring/new?intent=…](#) ← the link from step 8
 
-Then the rejected list, then the open question about what none of them catch.
+**Every field above is required, including the last one.** A proposal that stops at
+the prompt has handed the operator homework instead of a decision.
+
+Then **the rejected list** — a short table of what you considered and the number that
+killed each one — and the open question about what none of them catch. An answer with
+proposals but no rejected list is incomplete, however good the proposals are.
 
 ## When the honest answer is "nothing yet"
 

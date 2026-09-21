@@ -30,6 +30,24 @@ fp --json query run --sql \
    FROM events GROUP BY session_id ORDER BY errs DESC LIMIT 50"
 ```
 
+**Reading a payload key in SQL.** The store is ClickHouse and `payload` is a `String`
+holding JSON, so Postgres spellings are syntax errors, not empty results:
+`payload->>'key'` and `::float` both fail outright. Use the JSON functions, and note
+that the column is `event_type` (not `type`) and the timestamp is `ts`:
+
+```bash
+fp --json query run --sql \
+  "SELECT agent_id,
+          count() ends,
+          round(avg(JSONExtractBool(payload,'resolved')), 3) pct_resolved,
+          round(avg(JSONHas(payload,'sentiment_score')), 3) sentiment_present
+   FROM events WHERE event_type='agent_end' GROUP BY agent_id ORDER BY ends DESC"
+```
+
+`JSONExtractString` / `Float` / `Bool` read a value; `JSONHas` reads presence. That last
+column is the useful trick: it answers Gate A and Gate B in one query, putting the rate a
+key is present at next to the number it produces.
+
 ## Gate A without a payload profile
 
 The dashboard assistant has a profile of the organisation's payload keys. **The CLI has
@@ -61,6 +79,29 @@ claim, "present" is not.
 - **Keep `--full` bound to one `--session-id`.** It is slow at scale, and you do not need
   payloads to read a session's shape.
 
+## Building the authoring link
+
+There is no `build_eval_authoring_link` here — that tool belongs to the dashboard
+assistant. Build the link yourself; it is three pieces, and `fp` has two of them:
+
+```bash
+ORG=$(fp --json whoami | jq -r '.active_org // empty')
+BASE=${FP_DASHBOARD_URL:-https://app.befailproof.ai}
+PROMPT='Fraction of tool calls … Use the evaluation key `tool_retry_rate`.'
+
+[ -n "$ORG" ] && echo "$BASE/$ORG/eval-authoring/new?intent=$(jq -rn --arg p "$PROMPT" '$p|@uri')"
+```
+
+**If `active_org` comes back empty, do not build the link.** Under an API key with no
+`--org`, `whoami` reports `null` — and an instance-scoped key then resolves server-side
+to the *default* org, so a link built from a guess would open authoring against the wrong
+tenant. Hand over the prompt instead and say why: *"pass `--org <slug>` and I will build
+the link."*
+
+`@uri` matters: the prompt carries backticks, quotes and dashes, and the page decodes
+exactly what you encode. One link per proposal, same rules as the method — build it, do
+not offer to.
+
 ## The local deliverable
 
 Same slate, written down. Offer to save it as `eval-plan.md` — **ask first, and ask
@@ -68,5 +109,7 @@ where**: the file can carry paraphrased customer data, and this may be running b
 repo for it exists. Cite session ids and paraphrase what you saw; never paste raw
 transcript into a file.
 
-Each proposal still ends in the prompt, which the user takes to the dashboard's eval
-authoring page to compose, backtest and deploy.
+Each proposal still ends in the prompt and the link built above, which opens the
+dashboard's eval authoring page to compose, backtest and deploy. The link is the handoff;
+the prompt beside it is what the user can read before they click, and what they paste
+if the link could not be built.
