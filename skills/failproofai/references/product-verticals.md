@@ -13,7 +13,7 @@ a machine that was never meant to have it.
 |---|---|---|---|
 | Observe | hook activity + transcripts on disk, dashboard at `127.0.0.1:8020` | `events` `sessions` `errors` | `fp-cloud-cli` |
 | Enforce | packs you install + custom/convention policies, hooks in 12 harnesses | `policies` `fleet` `guardrails`, the backtest in the dashboard | `failproofai-policy-author`, `failproofai-policy-publish`, `fp-cloud-cli` |
-| Evaluate | — nothing | `evals` + an evaluator service you host | `agenteye-evaluator` |
+| Evaluate | — nothing | `evals` + hosted evaluations authored in the dashboard | `failproofai-eval-brainstorm` |
 | Audit | `failproofai audit`, offline, no account | `audits` → findings → `issues` | `failproofai`, `fp-cloud-cli` |
 | Manage | — nothing | `orgs` `keys` `users` `query` `alerts` `settings` `usage` | `fp-cloud-cli` |
 
@@ -274,11 +274,15 @@ list and aggregate honour every filter.
 
 The hard part is deciding what to score, and only the user knows that. The SDK part is small.
 
-Route: **`agenteye-evaluator`** — designing the dimensions, scaffolding the service, rules vs
-LLM judge, testing against a real captured session, deploying it and confirming scores land.
-That skill keeps its `agenteye` name because the package genuinely was not renamed: dist
-`agenteye-evaluator`, module `agenteye_evaluator`, user-agent `agenteye-server/<version>`. Do
-not "correct" it.
+Route: **`failproofai-eval-brainstorm`** — scanning the population, confirming the signal is
+really in the telemetry, checking it separates good runs from bad, and converging on two to
+four proposals, each ending in the prompt that authors it. It stops there: the dashboard's
+eval authoring page composes the evaluation, backtests it against real sessions and deploys it.
+
+It replaces the retired `agenteye-evaluator` skill, which also scaffolded the v1 evaluator
+service the server POSTed transcripts to — that service no longer exists. The *package* names
+were never renamed and are still correct where they appear: dist `agenteye-evaluator`, module
+`agenteye_evaluator`, user-agent `agenteye-server/<version>`.
 
 ---
 

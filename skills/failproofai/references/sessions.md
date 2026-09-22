@@ -7,7 +7,7 @@ dashboard-only, which `fp` reaches, and which only the HTTP API reaches.** Those
 sets differ, and none contains the others.
 
 Anchors are into the docs tree (`docs/sessions/*.mdx`, `docs/reference/*.mdx`,
-`docs/reference/openapi.json`) and the shipped `fp-cloud-cli` / `agenteye-evaluator` skills.
+`docs/reference/openapi.json`) and the shipped `fp-cloud-cli` / `failproofai-eval-brainstorm` skills.
 The rename has landed: this file writes **`fp`** (`uv tool install fp-cloud-cli`), and that is
 what to resolve first — `command -v fp agenteye`. `agenteye` is the legacy fallback, a
 separate package that is still installable; the read commands below behave the same there, but

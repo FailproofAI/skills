@@ -61,7 +61,7 @@ one for the other, in either direction.
 | dist `agenteye-evaluator` | the package index name. `pip install` fails |
 | module `agenteye_evaluator` | every `import` in every evaluator service anyone has written |
 | user-agent `agenteye-server/<version>` | how the evaluator identifies itself to the service it calls |
-| the skill `agenteye-evaluator` | see *Skill names* below — this is the one sibling that keeps its old name |
+| the skill `agenteye-evaluator` | **retired.** Deciding what to measure is now `failproofai-eval-brainstorm`; see *Skill names* below |
 
 The evaluator is the clean case: it was not renamed, so there is nothing here to modernise and
 no migration to describe. Cross-reference it by its real name.
@@ -117,14 +117,14 @@ the wrong half installs nothing.
 |---|---|---|
 | `fp-cloud-cli` | `agenteye-cli` | mirror, synced from upstream |
 | `failproofai-sdk` | `agenteye-python-sdk` | mirror. The module genuinely renamed to `failproofai_sdk` |
-| `agenteye-evaluator` | — | **not renamed upstream.** Keep this name when cross-referencing it |
+| `failproofai-eval-brainstorm` | `agenteye-evaluator` | **retired, not renamed** — the v1 evaluator service it built no longer exists. The distribution `agenteye-evaluator` and module `agenteye_evaluator` keep their names |
 | `failproofai` | — | maintained in this repo |
 | `failproofai-policy-author` | — | maintained in this repo |
 | `failproofai-policy-publish` | — | new |
 | `failproofai` | — | the complete umbrella skill |
 
 **The three mirrors are marked "do not hand-edit."** Never edit files under
-`skills/fp-cloud-cli/`, `skills/failproofai-sdk/` or `skills/agenteye-evaluator/`. If one
+`skills/fp-cloud-cli/`, `skills/failproofai-sdk/` or `skills/failproofai-eval-brainstorm/`. If one
 of them contradicts this page, the fix belongs upstream — and the directory name on disk may
 lag the shipped skill name, which is not a discrepancy to correct locally.
 

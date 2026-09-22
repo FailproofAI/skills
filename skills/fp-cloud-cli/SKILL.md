@@ -10,7 +10,7 @@ description: |-
 
   Served by the `fp` CLI against FailproofAI Cloud.
 
-  NOT for publishing reusable GitHub policy packs (`failproofai-policy-publish`), evaluator scoring (`agenteye-evaluator`), instrumenting an app (`failproofai-sdk`), or debugging the local collector/daemon.
+  NOT for publishing reusable GitHub policy packs (`failproofai-policy-publish`), deciding what to evaluate (`failproofai-eval-brainstorm`), instrumenting an app (`failproofai-sdk`), or debugging the local collector/daemon.
 ---
 
 # FailproofAI Cloud CLI

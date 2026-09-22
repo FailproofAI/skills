@@ -30,7 +30,7 @@ whole repository does.
 | [`failproofai-policy-publish`](skills/failproofai-policy-publish/) | The publishing companion to policy authoring - take tested policies, build an installable pack, publish its release assets to GitHub with `failproofai publish`, preview it, and verify the consumer path with `failproofai policies add <owner>/<repo>`. Cloud fleet rollout remains part of `fp-cloud-cli`. | Maintained here. Not synced from anywhere - edit in this repo. |
 | [`fp-cloud-cli`](skills/fp-cloud-cli/) | Operate FailproofAI Cloud with `fp`: inspect telemetry, evals and usage; triage issues and audits; manage keys, users, orgs, and settings; publish Cloud policy versions; deploy them to fleet machines; observe enforcement; promote or roll back. Global options go **before** the command: `fp --json sessions`, not `fp sessions --json`. | Synced from `FailproofAI/failproofai` → `fp-cloud-cli/skill/`. Do **not** hand-edit here. |
 | [`failproofai-sdk`](skills/failproofai-sdk/) | Make an AI agent report what it did - plan which points in the agent loop to record, write the instrumentation with the `failproofai_sdk` Python module, thread session/agent identity through it, and verify the events actually land. For an agent loop that is **not** one of the 12 supported CLIs. | Synced from `FailproofAI/failproofai` → `sdk/python/skill/`. Do **not** hand-edit here. |
-| [`agenteye-evaluator`](skills/agenteye-evaluator/) | Put automatic quality scores on an agent's production runs - decide which dimensions are worth scoring from real sessions, scaffold the scoring service with the `agenteye-evaluator` Python SDK, score with rules or an LLM judge, test it against a captured session, deploy it and confirm scores land. | Synced from `FailproofAI/agenteye` → `evaluator-sdk/skill/` (private). Do **not** hand-edit here. |
+| [`failproofai-eval-brainstorm`](skills/failproofai-eval-brainstorm/) | Work out **what is worth measuring** about an agent's production runs, from the sessions it actually produced - scan the population, confirm the signal is really in the telemetry (a measurement over a payload key nobody emits does not fail, it scores every session identically and looks like it works), check it separates good runs from bad, and converge on two to four proposals. Each one ends in the plain-English prompt that authors it. It stops there: composing, backtesting and deploying the evaluation is the dashboard's eval authoring page. | Synced from `FailproofAI/agenteye` → `agent/skills/failproofai-eval-brainstorm/` (private). Do **not** hand-edit here. |
 
 ## Naming and compatibility
 
@@ -42,7 +42,7 @@ preserved. Do not mechanically replace `AgentEye` everywhere.
 |---|---|---|
 | `fp-cloud-cli` | `skills/fp-cloud-cli/` | `agenteye-cli` |
 | `failproofai-sdk` | `skills/failproofai-sdk/` | `agenteye-python-sdk` |
-| `agenteye-evaluator` | `skills/agenteye-evaluator/` | **unchanged** because the current distribution and import remain `agenteye-evaluator` and `agenteye_evaluator` |
+| `failproofai-eval-brainstorm` | `skills/failproofai-eval-brainstorm/` | `agenteye-evaluator` - **retired, not renamed.** That skill built a v1 "server-push" evaluator service, which no longer exists. Scoring is now Evaluator v2: hosted evaluations authored in the dashboard, or a worker built on `failproofai-sdk`. What survives is the half only a human could do - deciding what to measure - and that is this skill. The `agenteye-evaluator` distribution and `agenteye_evaluator` module names are untouched by this. |
 
 The rename does not alter the `fp` or `failproofai` binaries, SDK behavior, Cloud API, saved
 credentials, or policy format. It only changes which skill identifier new installations use.
@@ -60,6 +60,15 @@ npx skills add FailproofAI/skills --skill failproofai-sdk -a claude-code
 Legacy wire and package literals such as `X-AgentEye-*`, `ae_session`, selected
 `AGENTEYE_*` variables, `agenteye-evaluator`, and `agenteye_evaluator` remain documented where
 they are still part of the running system.
+
+An installation of the retired `agenteye-evaluator` skill keeps working but is no longer
+served from here, and what it teaches - scaffolding a v1 push evaluator - no longer
+resolves to anything you can deploy. Migrate it once:
+
+```bash
+npx skills remove agenteye-evaluator
+npx skills add FailproofAI/skills --skill failproofai-eval-brainstorm -a claude-code
+```
 
 ## Install
 
@@ -182,10 +191,9 @@ skills/                         ← this repo
     │   ├── SKILL.md
     │   ├── references/          ← events · install · integration
     │   └── agents/openai.yaml
-    └── agenteye-evaluator/      ← mirror · name unchanged upstream
+    └── failproofai-eval-brainstorm/   ← mirror · what to measure, not how to score it
         ├── SKILL.md
-        ├── references/          ← brainstorm · scaffold · sdk-api · session-data
-        └── agents/openai.yaml
+        └── references/          ← patterns · writing-the-prompt · cli
 ```
 
 Each skill folder is **self-contained**: its references/scripts/assets live inside
