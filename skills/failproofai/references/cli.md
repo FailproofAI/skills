@@ -346,7 +346,7 @@ components** and renaming one breaks a running system: `AGENTEYE_KEY` is the col
 ingest bearer, `AGENTEYE_API_KEY` is dashboard admin, and `FP_API_KEY` was named
 deliberately so it would *not* collide with either. Never substitute one for another.
 `AGENTEYE_SPOOL_TO_FAILPROOFAI`, `AGENTEYE_ENVIRONMENT` and `AGENTEYE_ORG` appear in
-FailproofAI's docs but exist **nowhere in this codebase** — they belong to the Python SDK.
+FailproofAI's docs but exist **nowhere in this codebase** — they belong to the SDKs.
 
 ## `~/.failproofai/` — layout 4
 

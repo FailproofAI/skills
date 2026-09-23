@@ -29,7 +29,7 @@ whole repository does.
 | [`failproofai-policy-author`](skills/failproofai-policy-author/) | Turn what agents keep doing wrong into enforcement for [failproofai](https://github.com/FailproofAI/failproofai) - triage a `failproofai audit` or FailproofAI Cloud findings, convert a CLAUDE.md/AGENTS.md into policies, or take a plain complaint ("agents keep force-pushing") and enforce it. Checks the shipped builtins and their params before writing anything, since most requests are one line of config; knows which of the 12 supported agent CLIs actually enforce a given event, so it never ships a deny the harness discards; tests every policy it authors. | Maintained here. Not synced from anywhere - edit in this repo. |
 | [`failproofai-policy-publish`](skills/failproofai-policy-publish/) | The publishing companion to policy authoring - take tested policies, build an installable pack, publish its release assets to GitHub with `failproofai publish`, preview it, and verify the consumer path with `failproofai policies add <owner>/<repo>`. Cloud fleet rollout remains part of `fp-cloud-cli`. | Maintained here. Not synced from anywhere - edit in this repo. |
 | [`fp-cloud-cli`](skills/fp-cloud-cli/) | Operate FailproofAI Cloud with `fp`: inspect telemetry, evals and usage; triage issues and audits; manage keys, users, orgs, and settings; publish Cloud policy versions; deploy them to fleet machines; observe enforcement; promote or roll back. Global options go **before** the command: `fp --json sessions`, not `fp sessions --json`. | Synced from `FailproofAI/failproofai` → `fp-cloud-cli/skill/`. Do **not** hand-edit here. |
-| [`failproofai-sdk`](skills/failproofai-sdk/) | Make an AI agent report what it did - plan which points in the agent loop to record, write the instrumentation with the `failproofai_sdk` Python module, thread session/agent identity through it, and verify the events actually land. For an agent loop that is **not** one of the 12 supported CLIs. | Synced from `FailproofAI/failproofai` → `sdk/python/skill/`. Do **not** hand-edit here. |
+| [`failproofai-sdk`](skills/failproofai-sdk/) | Make an AI agent report what it did - plan which points in the agent loop to record, write the instrumentation with the Python (`failproofai_sdk`) or TypeScript/JavaScript (`@failproofai/sdk`) SDK - a framework adapter or a hand-built loop - thread session/agent identity through it, and verify the events actually land. Also runs your own evaluator worker (the eval pod) in either language. For an agent loop that is **not** one of the 12 supported CLIs. | Synced from `FailproofAI/failproofai` → `sdk/python/skill/`. Do **not** hand-edit here. |
 | [`failproofai-eval-brainstorm`](skills/failproofai-eval-brainstorm/) | Work out **what is worth measuring** about an agent's production runs, from the sessions it actually produced - scan the population, confirm the signal is really in the telemetry (a measurement over a payload key nobody emits does not fail, it scores every session identically and looks like it works), check it separates good runs from bad, and converge on two to four proposals. Each one ends in the plain-English prompt that authors it. It stops there: composing, backtesting and deploying the evaluation is the dashboard's eval authoring page. | Synced from `FailproofAI/agenteye` → `agent/skills/failproofai-eval-brainstorm/` (private). Do **not** hand-edit here. |
 
 ## Naming and compatibility
@@ -187,9 +187,9 @@ skills/                         ← this repo
     │   ├── SKILL.md
     │   ├── references/commands.md
     │   └── agents/openai.yaml
-    ├── failproofai-sdk/         ← mirror · Python SDK
+    ├── failproofai-sdk/         ← mirror · Python + TypeScript SDK, evaluator worker
     │   ├── SKILL.md
-    │   ├── references/          ← events · install · integration
+    │   ├── references/          ← events · install · integration · frameworks · typescript · evaluator
     │   └── agents/openai.yaml
     └── failproofai-eval-brainstorm/   ← mirror · what to measure, not how to score it
         ├── SKILL.md

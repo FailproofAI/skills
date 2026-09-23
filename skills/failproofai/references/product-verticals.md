@@ -249,24 +249,31 @@ shapes are `references/commands.md`.
 
 # EVALUATE — was that run any good?
 
-The one vertical the product does not implement for you. **An evaluator is an HTTP service you
-own.** When a session ends, the server POSTs the whole transcript to it and you return scores.
-There is no registry and no plugin system; nothing is uploaded.
+An evaluation scores a **finished** session. Two places one can run, and both only work on
+sessions that exist — an agent that never emits `agent_start`/`agent_end` has nothing to score:
+
+- **Hosted** (the default): written in the dashboard under **Analyze → eval authoring**, run by
+  FailproofAI's managed evaluator. Results are tagged **managed**.
+- **Your own worker** (the "eval pod"): an `Evaluator` you write with the SDK —
+  `failproofai_sdk.evaluator` (Python) or `@failproofai/sdk/evaluator` (TypeScript) — for LLM
+  judges on your own keys, packages, secrets or private network. It needs an
+  `evaluations:run` key and **only calls out**: nothing connects in to it. Results are tagged
+  **customer**.
 
 ```
-agent run ends  →  the server POSTs the transcript to YOUR service
-                →  you return {"scores": {"helpfulness": 0.9, …}}
-                →  scores land in evaluations  →  fp evals
+session ends (agent_end)  →  hosted evaluator, or YOUR worker, claims it
+                          →  runs each evaluation whose condition applies
+                          →  results land in evaluations  →  fp evals
 ```
 
 | The question | The command | The trap |
 |---|---|---|
-| "show me the scores" | `fp --json evals --since 7d` | Empty is the **normal** answer with no evaluator running. It is not a broken install |
+| "show me the scores" | `fp --json evals --since 7d` | Empty is the **normal** answer with no evaluation enabled and no worker running. It is not a broken install |
 | "how is this agent doing overall?" | `fp --json evals --aggregate --agent-id <agent>` | Aggregate is over the whole matching set — point it at one slice or it means nothing |
 | "which metric is worst?" | `fp --json evals --aggregate ... \| jq '.score_stats'` | Sorted worst-average-first already |
 | "only the good runs" | `fp evals --score helpfulness:0.8.. --since 7d` | `KEY:MIN..MAX`, either bound optional, repeatable, **all ranges ANDed** |
-| "what metrics exist?" | `fp --json list score_filters` | These are the keys your own evaluator emitted. Nothing is predefined |
-| "why is `sessions` status blank?" | — | Never evaluated. Same root cause: no evaluator |
+| "what metrics exist?" | `fp --json list score_filters` | These are the keys your evaluations emitted. Nothing is predefined |
+| "why is `sessions` status blank?" | — | Never evaluated. Same root cause: nothing enabled applies to it |
 
 `evals` filters take **one value each** (`--env`, `--status`, `--agent-id`, `--session-id`).
 `--status` is `done`, `error` or `timeout` — the run's health, not a score threshold. Both
@@ -274,15 +281,18 @@ list and aggregate honour every filter.
 
 The hard part is deciding what to score, and only the user knows that. The SDK part is small.
 
+Building, deploying and debugging your own worker — both languages, env vars, a Dockerfile,
+SIGTERM drain vs. the pod's grace period — is **`failproofai-sdk`** (`references/evaluator.md`).
+
 Route: **`failproofai-eval-brainstorm`** — scanning the population, confirming the signal is
 really in the telemetry, checking it separates good runs from bad, and converging on two to
 four proposals, each ending in the prompt that authors it. It stops there: the dashboard's
 eval authoring page composes the evaluation, backtests it against real sessions and deploys it.
 
-It replaces the retired `agenteye-evaluator` skill, which also scaffolded the v1 evaluator
-service the server POSTed transcripts to — that service no longer exists. The *package* names
-were never renamed and are still correct where they appear: dist `agenteye-evaluator`, module
-`agenteye_evaluator`, user-agent `agenteye-server/<version>`.
+It replaces the retired `agenteye-evaluator` skill, which scaffolded the v1 evaluator service
+the server POSTed transcripts to — that service no longer exists; the worker in the SDK is its
+successor. The v1 *package* names were never renamed and are still correct where they appear:
+dist `agenteye-evaluator`, module `agenteye_evaluator`, user-agent `agenteye-server/<version>`.
 
 ---
 

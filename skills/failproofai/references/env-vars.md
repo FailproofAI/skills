@@ -226,7 +226,7 @@ dashboard, or a dashboard session at GitHub, and neither fails in a way that nam
 ### Names that look like they belong here and do not
 
 `AGENTEYE_SPOOL_TO_FAILPROOFAI` and `AGENTEYE_ENVIRONMENT` appear in FailproofAI's docs but
-exist **nowhere in the local codebase** — they belong to the Python SDK. Do not go looking for
+exist **nowhere in the local codebase** — they belong to the SDKs (`AGENTEYE_ENVIRONMENT` is read by both the Python and the TypeScript SDK). Do not go looking for
 a read site in `failproofai`; there is none.
 
 `AGENTEYE_ORG` is a third case again: legacy `agenteye` genuinely reads it as its tenant slug,
