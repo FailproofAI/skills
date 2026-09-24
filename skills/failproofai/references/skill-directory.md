@@ -98,18 +98,18 @@ Publishing a GitHub pack neither pushes source code nor installs the pack on a m
 Was `agenteye-cli`. Its 23-command surface is the cloud half of everything the other skills
 describe; when another skill says "hand off to the cloud CLI", this is the destination.
 
-### `failproofai-sdk` — instrument your own agent
+### `failproofai-sdk` — instrument your own agent, run your own evaluator
 
 | | |
 |---|---|
-| **Owns** | making an agent that is **not** one of the 12 supported CLIs report what it did: planning which points in the loop to record, threading session and agent identity, emitting tool/model/hook/human events, and proving the `.jsonl` files land |
-| **Refuses** | reading telemetry that already arrived or operating a deployment (`fp-cloud-cli`), and deciding what is worth evaluating (`failproofai-eval-brainstorm`) |
-| **Route to it when** | the agent is a Python loop, a LangChain/LangGraph/CrewAI/LlamaIndex/Pydantic AI app, or anything custom — there are no hooks to install because there is no harness |
+| **Owns** | making an agent that is **not** one of the 12 supported CLIs report what it did — in Python (`failproofai-sdk`) or TypeScript/JavaScript (`@failproofai/sdk`): planning which points in the loop to record, turning on a framework adapter or wiring a hand-built loop, threading session and agent identity, emitting tool/model/hook/human events, and proving the `.jsonl` files land. Also the customer evaluator worker ("eval pod") that ships in the same packages: writing it, deploying it, debugging one that scores nothing |
+| **Refuses** | reading telemetry or scores that already arrived (`fp-cloud-cli`), and deciding what is worth evaluating (`failproofai-eval-brainstorm`) |
+| **Route to it when** | the agent is a Python or TypeScript/JavaScript loop, a LangChain/LangGraph/CrewAI/LlamaIndex/Pydantic AI or LangChain.js/Vercel AI SDK/Mastra/LlamaIndex.TS app (Node, Bun, Deno, Next.js), or anything custom — there are no hooks to install because there is no harness; or when an evaluation needs your own keys, packages or network and so runs in your own worker |
 | **Install** | `npx skills add FailproofAI/skills --skill failproofai-sdk -a claude-code` |
 | **Maintained** | **mirror — do not hand-edit** |
 
 Was `agenteye-python-sdk`, and unlike the wire literals **the module genuinely renamed** to
-`failproofai_sdk`. The SDK's job ends at the file it writes; a separate collector ships it,
+`failproofai_sdk`; the TypeScript package `@failproofai/sdk` is new, with no predecessor. The SDK's job ends at the file it writes; a separate collector ships it,
 which is why "my events never appear" splits between this skill and `failproofai`.
 
 ### `failproofai-eval-brainstorm` — decide what is worth scoring
@@ -139,7 +139,8 @@ and looks like it is working.
 | Cloud binary / distribution | `fp` / `fp-cloud-cli` | `agenteye` / `agenteye` (still installable, 0.1.13, legacy) |
 | Local binary / package | `failproofai` / `failproofai` (npm) | — |
 | Python SDK module | `failproofai_sdk` | `agenteye` |
-| Evaluator distribution | `agenteye-evaluator` | *not renamed* |
+| TypeScript SDK package | `@failproofai/sdk` | — (new) |
+| Evaluator worker | `failproofai_sdk.evaluator` / `@failproofai/sdk/evaluator` | `agenteye-evaluator` — the v1 service, **retired**, not renamed |
 
 Spell the service **FailproofAI Cloud**, one word, matching the binary's own output. The
 public docs site spells it "Failproof AI" with a space — do not propagate that spelling into

@@ -110,6 +110,7 @@ the wrong half installs nothing.
 | dist `agenteye` / module `agenteye_cli` | — | the legacy cloud CLI, 0.1.13. A separate package that is still installable |
 | `npm i -g failproofai` | — | the local CLI, Node >= 20.9 |
 | module `failproofai_sdk` | `agenteye` (as a Python import) | the Python SDK's module **genuinely was renamed** |
+| `npm install @failproofai/sdk` | `npm install failproofai` (for an agent) | the TypeScript SDK is the scoped package; unscoped `failproofai` is the local CLI and daemon installer |
 
 ## Skill names — already shipped upstream, do not invent alternatives
 
@@ -158,7 +159,7 @@ Do not go hunting for these; they resolve to nothing in the local codebase.
 |---|---|
 | `FAILPROOFAI_KEY` | nowhere. A shell placeholder in docs for a pasted token |
 | `AGENTEYE_SPOOL_TO_FAILPROOFAI` | the Python SDK. Not the local CLI or daemon |
-| `AGENTEYE_ENVIRONMENT` | the Python SDK. Not the local CLI or daemon |
+| `AGENTEYE_ENVIRONMENT` | both SDKs (Python and TypeScript). Not the local CLI or daemon |
 | `AGENTEYE_ORG` | legacy `agenteye` and the Python SDK — **not** the local codebase, and not `fp`, which uses `FP_ORG`. The header it becomes is still `X-AgentEye-Org` |
 
 ---

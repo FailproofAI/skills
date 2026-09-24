@@ -66,7 +66,7 @@ reach, and an agent that meets one of these needs to know it is the same product
 | `AGENTEYE_HOME`, `~/.agenteye/events` | the **local daemon's** legacy SDK spool, which it still watches |
 | `AGENTEYE_KEY` (collector ingest), `AGENTEYE_API_KEY` (dashboard admin) | ingest credentials. `FP_API_KEY` was named deliberately *not* to collide — never tell anyone to reuse either |
 | `ghcr.io/agenteye-enterprise`, k8s namespace `agenteye`, ClickHouse `agenteye.events` | self-hosted infrastructure |
-| dist `agenteye-evaluator`, module `agenteye_evaluator`, UA `agenteye-server/<version>` | the RETIRED v1 evaluator package. Scoring is Evaluator v2 now: author a hosted evaluation in the dashboard, or run a worker on `failproofai-sdk` |
+| dist `agenteye-evaluator`, module `agenteye_evaluator`, UA `agenteye-server/<version>` | the RETIRED v1 evaluator package. Scoring is Evaluator v2 now: author a hosted evaluation in the dashboard, or run a worker on the SDK (`failproofai_sdk.evaluator` / `@failproofai/sdk/evaluator`) |
 | `incidents:read`/`:write`/`:ack`, `alerts:ack`, the `INCIDENT_ID` positional on `issues show` | retired grants and arguments the server still parses |
 
 **The env prefix follows the binary.** `fp` reads `FP_HOME`, `FP_JSON`, `FP_TOKEN`,
@@ -110,7 +110,8 @@ evaluation itself, so nothing here scaffolds an evaluator service any more.
 | Publish a Cloud policy version, deploy it to fleet machines, observe, enforce, or roll back | **`fp-cloud-cli`** |
 | Query FailproofAI Cloud — browse sessions, events, errors, evals; triage issues/alerts; manage keys, users, roles, settings | **`fp-cloud-cli`** (the cloud CLI skill) |
 | Decide what to score — which dimensions are worth tracking, grounded in real sessions | **`failproofai-eval-brainstorm`** |
-| Instrument an agent that is **not** one of the 12 supported CLIs — a Python/LangChain/custom loop | **`failproofai-sdk`** |
+| Instrument an agent that is **not** one of the 12 supported CLIs — Python or TypeScript/JavaScript, on a framework (LangChain/LangGraph, CrewAI, LlamaIndex, Pydantic AI, Vercel AI SDK, Mastra) or hand-built | **`failproofai-sdk`** |
+| Run your own evaluator worker (the eval pod) — LLM judges or checks on your own infra, in Python or TypeScript | **`failproofai-sdk`** |
 | Every surface at once — product architecture, commands, terminology, setup, and skill selection | **stay here** |
 | Anything local-machine: install, connect, daemon, backfill, flush, capture paths, upgrade, uninstall | **stay here** |
 | Keys and org *concepts*, self-hosting, "what is X" | **stay here** |
