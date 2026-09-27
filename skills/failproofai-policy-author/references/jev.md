@@ -157,10 +157,15 @@ state, in one round trip.
 - a fired `deny` check denies at ≥ 0.85, otherwise it warns; an `instruct` check warns;
 - a suspected injection (the call contains text addressed to the reviewer) turns any fired
   check into a deny and withdraws every clear;
-- with `userCanOverride: true`: `op_requested` ≥ 0.8 with `beyond_task` < 0.5 (and the call's
-  target named in what the user typed, or in the agent message they replied to) allows it;
-  otherwise `task_step` ≥ 0.8 with `beyond_task` < 0.3 drops a warning and softens a deny to a
-  warning. These task questions are asked only when a human message was recorded.
+- with `userCanOverride: true`: `op_requested` ≥ 0.8 with `beyond_task` < 0.5 (and, for a
+  shell command, **every** one of its targets named in what the user typed, or in the agent
+  message they replied to) allows it; otherwise `task_step` ≥ 0.8 with `beyond_task` < 0.3
+  drops a warning and softens a deny to a warning, except on a shell command where the user
+  named some of its targets but not all. These task questions are asked only when a human
+  message was recorded;
+- consent never clears a shell command the scanner cannot fully read: `$'…'`, `$(…)`,
+  backticks, heredocs, `eval` or `sh -c` strings, unclosed quotes and similar keep the regex
+  floor, though Jev's own deny or warning still counts. Keep a probe's test commands plain.
 
 **What Jev is shown**, so probes can refer to it by name (`src/hooks/semantic/envelope.ts`):
 `agent_request` (the call, secrets redacted), `user_said` (what the human typed, harness text
