@@ -194,8 +194,18 @@ function runCase(c, sandbox) {
   }
   if (c.event === "Stop") payload.stop_hook_active = false;
 
-  const env = { ...process.env, FAILPROOFAI_TELEMETRY_DISABLED: "1" };
-  if (sandbox) env.HOME = sandbox;
+  // Legacy evaluator: this tests the regex floor, so a configured Jev must not
+  // let Jev's own deny pass a case the floor misses, nor clear a reviewable
+  // deny the floor should show. In-process only: a daemon worker does not see
+  // this variable, which is why the sandbox also drops the daemon socket.
+  const env = { ...process.env, FAILPROOFAI_TELEMETRY_DISABLED: "1", FAILPROOFAI_EVALUATOR: "legacy" };
+  if (sandbox) {
+    env.HOME = sandbox;
+    // Both are read before HOME and would bring the real config, jev.json or
+    // daemon back into the sandbox.
+    delete env.FAILPROOFAI_HOME;
+    delete env.FAILPROOFAI_DAEMON_SOCKET;
+  }
 
   const cli = c.cli ?? args.cli;
   const hookArgs = ["--hook", c.event];

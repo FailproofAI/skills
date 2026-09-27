@@ -8,9 +8,10 @@
 4. [A deny does not prove *your* deny](#4-a-deny-in-your-test-does-not-prove-your-policy-denied)
 5. [Validation is nil](#5-validation-is-essentially-nil)
 6. [Unsatisfiable Stop gates loop](#6-a-stop-gate-that-cannot-be-satisfied-loops-forever)
-7. [Builtins enabled by presence](#7-builtins-are-enabled-by-presence-not-by-a-flag)
+7. [Builtins enabled by presence, and only while no pack is installed](#7-builtins-are-enabled-by-presence-and-only-while-no-pack-is-installed)
 8. [`ctx.params` always empty](#8-ctxparams-is-always-empty-for-custom-policies)
 9. [Sanitizers block, not redact](#9-sanitizers-block-they-do-not-redact--and-deny-cannot-set-message-anyway)
+10. [Jev fails quietly](#10-jev-reviewable-and-semantic-policies-fail-quietly)
 
 Every item here is a documented, already-been-hit failure where a policy looks installed and
 enforces nothing. Read this before reporting any policy as working.
@@ -170,10 +171,22 @@ The same reachability rule applies to custom Stop policies — always `try/catch
 calls and `return allow()` on failure, so an unavailable tool degrades to letting the turn
 end rather than trapping it.
 
-## 7. Builtins are enabled by presence, not by a flag
+## 7. Builtins are enabled by presence, and only while no pack is installed
 
 `enabledPolicies` is a `string[]`. Omission means off. There is no
 `{"block-rm-rf": false}` form — to disable, remove the string.
+
+It is also a migration shim now. Builtins ship as the `FailproofAI/policies` pack, and
+`enabledPolicies` is read **only while no pack at all is installed** on the machine
+(`handler.ts`, grep `packsInstalledHere`). Install any pack, a one-check Jev pack included,
+and every builtin listed there stops loading; nothing on the command line says so.
+`~/.failproofai/policies/packs/installed.json` lists what is installed. On such a machine,
+switch builtins on in the pack instead (machine-wide):
+
+```bash
+failproofai policies add FailproofAI/policies                       # once, if it is not installed
+failproofai policies add FailproofAI/policies --policy block-rm-rf  # adds to what is on
+```
 
 Params live in a **sibling** `policyParams` object keyed by the same short name, not nested
 inside the policy entry:
@@ -220,3 +233,45 @@ So a sanitize deny on `PostToolUse` blocks the *entire* tool output; the model s
 block reason, never a redacted version. Protection holds — by omission — but do not tell a
 user "the token is scrubbed and the rest passes through." Put anything the agent needs into
 `reason`, and prefer `sanitize-api-keys.additionalPatterns` over authoring. See `api.md`.
+
+## 10. Jev: reviewable and semantic policies fail quietly
+
+Each of these leaves a policy that reads as Jev-aware and behaves as something else.
+`references/jev.md` has the full rules; this is the checklist.
+
+1. **Jev off, in shadow, or not answering means the regex decides.** Without
+   `~/.failproofai/jev.json`, or with `mode: "off"`, a reviewable policy is its hard regex
+   and no semantic check is asked. In `shadow`, clears and Jev's own denies are only
+   recorded. A timeout, 429, 402, 5xx or malformed reply falls back to the regex for that
+   call, so a concern with no regex floor is allowed. Jev also sees only `PreToolUse` and
+   `PermissionRequest`: a reviewable `Stop` or `PostToolUse` policy is hard everywhere.
+2. **`semanticPolicies.add` outside a pack does nothing.** Only `failproofai publish` reads
+   it. In `.failproofai/policies/` it loads without error and is never asked (the hook log
+   says `… never asked here`); a FailproofAI Cloud-managed policy ignores it, and ignores
+   `authority`/`reviewedBy` too: it is always hard.
+3. **A check that is never asked makes the block permanent.** Its `appliesTo` and
+   precondition must select every shape the regex fires on. One unknown name in
+   `reviewedBy` makes the whole declaration hard. The exception runs the other way: a tool
+   no class knows (every `mcp__*`) is asked every check, so a floor on an MCP tool can clear
+   there unless its reviewer models the MCP call (item 4).
+4. **A check asked that does not model the shape switches the policy off.** Asked and not
+   firing answers "no concern", and no concern clears, with no warning. `warn-git-clean`
+   stays hard because `destructive-deletion` cannot judge a `git clean` that names no path.
+   An inverted probe (true for the harmless case) does the same on every call.
+5. **Nothing left that can deny turns a block into a warning.** An instruct-only reviewer
+   can never deny, and before a tool call a warning does not stop the agent. The block
+   survives only where a deny-mode check still covers the call. `block-work-on-main` stays
+   hard for this reason. And with `userCanOverride: true`, the user's request, which an
+   agent with a shell can forge, clears even a deny-mode check.
+6. **A pack's limits fail at install, not at publish.** `publish` checks one pack against
+   the 9,101 characters the built-in checks leave; several installed packs share that, and a
+   check that no longer fits is dropped at load (named by `policies add` and the hook log).
+   A built-in check name from a non-FailproofAI pack is void, a name two packs declare
+   differently is asked for neither, and an `observe` pack's checks, or a `--cli` pack's for
+   other agents, are never asked. Every policy naming such a check stays hard.
+7. **Old packs and old CLIs mark nothing reviewable.** Authority lives in the manifest, so a
+   pack built by an older `publish`, or an older `FailproofAI/policies` release, is all hard.
+   A CLI older than 1.0.8-beta.0 ignores or misreads a pack's checks, which is why `publish`
+   writes `minCliVersion` ≥ 1.0.8-beta.0. A pack of Jev checks alone can make an older
+   build deny every tool call, so remove it (`failproofai policies remove <id>`) before
+   downgrading.

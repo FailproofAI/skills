@@ -5,7 +5,7 @@ description: |-
 
   Trigger when the user wants to:
   • act on an audit — turn `failproofai audit` findings into fixes, or ask which policies work;
-  • stop a recurring behaviour, in plain words or as "write a policy that blocks X";
+  • stop a recurring behaviour, in plain words or as "write a policy that blocks X" (regex or Jev);
   • enforce a rules file — make a CLAUDE.md / AGENTS.md real instead of advisory;
   • enable an existing builtin — usually the right answer, checked first;
   • work from FailproofAI Cloud — findings, hooks that fail or over-deny, backtesting a draft.
@@ -323,6 +323,9 @@ Run the attribution above first — a `DEAD` finding is not Bucket A, B or C; it
 **Bucket A — a builtin covers it and is off.** Do not write code. Add the short name to
 `enabledPolicies` in `.failproofai/policies-config.json`. This is the cheapest and most
 maintainable fix, and it is the right answer for most `source: "builtin"` findings.
+**Once any pack is installed on the machine** (a Jev pack included), `enabledPolicies` is no
+longer read at all: switch the builtin on in the pack instead,
+`failproofai policies add FailproofAI/policies --policy <name>` (`references/traps.md` §7).
 
 **Bucket B — a builtin covers it and is already on.** No action. Report it so the user knows
 the finding is historical, not ongoing.
@@ -453,6 +456,12 @@ and parameters. If one matches, enabling it beats writing a new file every time.
 Many builtins take `params` (allowlists, thresholds, protected branches) that go in the
 `policyParams` map — a parameterized builtin often covers a case that looks custom.
 
+If the complaint is that a builtin is **noisy** (`block-kubectl` denying `kubectl get`), try
+its `allowPatterns` / `allowPaths` param first: that trades nothing. The other fix is Jev:
+15 builtins ship **reviewable**, and Jev clears them on calls it judges harmless once it runs
+in `enforce` mode (*Jev: when no string decides it*). The price is that forged consent clears
+them too.
+
 Then check the project's **existing custom policies** — `ls .failproofai/policies/` and
 read their `name`/`description` lines. Coverage is not only builtins: a hand-written policy
 may already enforce exactly what you were about to author, and a duplicate means two
@@ -526,6 +535,43 @@ Location: `.failproofai/policies/` in the project.
 This is the highest-frequency failure in the whole system — see `references/traps.md` §1.
 
 See `references/patterns.md` for worked examples per event type.
+
+### Jev: when no string decides it
+
+Some concerns are not in the command. `rm -rf build/` that the user asked for and `rm -rf ~`
+that slipped into a plan; `prisma migrate deploy` against localhost and against production.
+A regex that blocks all of them gets disabled; one that allows them enforces nothing.
+**Jev** is failproofai's semantic evaluator: it answers yes/no questions about the call
+against what the human typed. **Read `references/jev.md` before writing either half** — it
+has the field rules, a complete pack entry, the budget, and the local test loop.
+
+The shape, in brief:
+
+- **Two tiers.** The regex is the hard floor; Jev judges above it on `PreToolUse` and
+  `PermissionRequest` only. Jev can **deny** or **instruct** through a check that fires, and
+  can **clear** only a **reviewable** policy's verdict. A hard deny is final. When Jev is not
+  configured, is in `shadow`, is `off`, or does not answer, the regex result applies, so
+  anything that must hold everywhere needs a regex floor.
+- **Reviewable** is two fields on `customPolicies.add`: `authority: "reviewable"` and
+  `reviewedBy: ["<check>"]` (check names, not policy names). The verdict clears only when every
+  named check was asked and none found the concern without the user asking. The test to apply
+  is **"once this clears, is there anything left that can deny?"**, not "can the reviewer keep
+  this block". A check that is asked but does not model a shape answers "no concern" and
+  **clears it silently**; an instruct-only reviewer can never deny; and an agent with a shell
+  can forge the user's consent. Keep irreversible, privilege and remote-code rules hard.
+- **A semantic check** is `semanticPolicies.add({ name, title, appliesTo, mode,
+  userCanOverride, probes, guidance })`: questions, no `fn`. Every probe must hold for it to
+  fire, so **every probe states the harmful claim**, true for the harmful call and false for
+  the harmless one.
+- **It only works in a pack.** In `.failproofai/policies/` it is never asked, and a
+  FailproofAI Cloud-managed policy ignores all Jev fields and is always hard. **Jev checks
+  belong in packs**, published with `failproofai-policy-publish`, with `minCliVersion` ≥
+  `1.0.8-beta.0`. A pack's checks join the 16 built-in ones, cannot reuse their names, share
+  a ~9,100-character question budget beside them, and are not asked for an `observe` pack.
+- **Test both tiers.** `test-policy.mjs --policy` tests the floor alone (no Jev).
+  `failproofai publish <file> --dry-run` validates the pack. Then `failproofai jev setup
+  … --mode shadow` (its bring-your-own-key default is `enforce`), `jev test`, `jev status`.
+  Use a **vague** prompt to see a check decide: naming the operation reads as consent.
 
 ### Verify it actually fires
 
@@ -775,11 +821,13 @@ failproofai policies --list
 | Half | The question it answers | Skill |
 |---|---|---|
 | author | *what is the rule, and does it decide correctly?* | this one |
-| publish | *how does this tested policy become a versioned GitHub pack others can install?* | `failproofai-policy-publish` |
+| publish | *how does this tested policy, or a Jev check, become a versioned GitHub pack others can install?* | `failproofai-policy-publish` |
 | cloud rollout | *which fleet machines run a Cloud policy version, and what did it block?* | `fp-cloud-cli` |
 
 Everything past a proven local file is the deploy half: minting a version with
-`fp policies publish` (which **deploys nothing** on its own), choosing `enforce` vs
+`fp policies publish` (which **deploys nothing** on its own, and makes a Cloud-managed
+policy that never reads Jev fields: strip `semanticPolicies.add`, `authority` and
+`reviewedBy` first, and ship the Jev half as a pack), choosing `enforce` vs
 `observe`, `fp fleet deploy`, rollback, and reading `fp guardrails` to see the rule fire on
 real traffic. Those are shipped commands — if you find yourself about to say deployment is
 "dashboard work" or "not exposed by the CLI", that is wrong, and it tells the reader to stop

@@ -5,6 +5,7 @@
 - [The policy object](#the-policy-object) · [Context](#context) · [Decisions](#decisions)
 - [Events](#events) · [Filtering by tool](#filtering-by-tool)
 - [Execution model](#execution-model) · [Configuration](#configuration)
+- [Jev fields](#jev-fields)
 
 > Source pointers below are paths inside the failproofai package. In a project that
 > installed it, they live under `node_modules/failproofai/`; in a source checkout,
@@ -13,9 +14,12 @@
 Everything here is exported from `src/index.ts` — that file is the entire public surface:
 
 ```ts
-export { customPolicies, getCustomHooks, clearCustomHooks } from "./hooks/custom-hooks-registry";
+export { customPolicies, semanticPolicies, getCustomHooks, getSemanticRegistrations,
+  clearCustomHooks } from "./hooks/custom-hooks-registry";
 export { allow, deny, instruct } from "./hooks/policy-helpers";
-export type { PolicyContext, PolicyResult, CustomHook, PolicyDecision, PolicyFunction } from "./hooks/policy-types";
+export type { PolicyContext, PolicyResult, CustomHook, PolicyDecision, PolicyFunction,
+  PolicyAuthority, SemanticPolicyDeclaration, SemanticProbeDeclaration,
+  SemanticToolClass } from "./hooks/policy-types";
 ```
 
 ## The policy object
@@ -30,6 +34,8 @@ export interface CustomHook {
     events?: HookEventType[];
   };
   fn: (ctx: PolicyContext) => PolicyResult | Promise<PolicyResult>;
+  authority?: "hard" | "reviewable";   // absent = hard. See *Jev fields*
+  reviewedBy?: string[];               // semantic check names
 }
 ```
 
@@ -181,3 +187,17 @@ is no per-policy enabled/disabled object, and omission means off.
 
 Merged across three scopes, in precedence order: project `{cwd}/.failproofai/` → local →
 global `~/.failproofai/` (`hooks-config.ts`, grep `readMergedHooksConfig`).
+
+## Jev fields
+
+Two additions to the surface, both covered in full in `jev.md`:
+
+- `authority` / `reviewedBy` on `customPolicies.add`: whether the Jev semantic evaluator may
+  clear this policy's verdict, and through which checks. Honoured for your own local files;
+  for a pack policy the manifest decides (`failproofai publish` copies them there); a
+  FailproofAI Cloud-managed policy ignores them and is always hard (`policy-types.ts`, grep
+  `interface CustomHook`).
+- `semanticPolicies.add(decl)`: a Jev check, a question set with no `fn`
+  (`policy-types.ts`, grep `interface SemanticPolicyDeclaration`). Read only by
+  `failproofai publish`, so it takes effect **only in a pack**. `getSemanticRegistrations()`
+  returns what is declared, for tests; `clearCustomHooks()` clears both registries.

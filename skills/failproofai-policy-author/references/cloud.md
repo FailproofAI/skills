@@ -232,7 +232,15 @@ plus a config entry, and that is the whole story for one machine. It is **not** 
 for a fleet: `fp policies publish`, `fp fleet deploy` and `fp guardrails` are shipped commands
 that carry the same rule to every machine and show it firing, and they need `policies:write`.
 That Cloud rollout path belongs to `fp-cloud-cli` — hand off rather than assuming the local
-edit is all there is. Then prove both local edits took effect, because neither is self-evident:
+edit is all there is.
+
+**A Cloud-managed policy has no Jev half.** It is always hard, whatever `authority` and
+`reviewedBy` say, and a `semanticPolicies.add` in it is never asked. So strip all three
+before `fp policies publish`. When the finding needs a judgment no string decides, ship that
+half as a Jev check in a policy **pack** (`jev.md`), beside the hard Cloud policy or instead
+of it.
+
+Then prove both local edits took effect, because neither is self-evident:
 
 ```bash
 export SKILL_DIR=/path/to/skills/failproofai-policy-author   # this skill's own folder

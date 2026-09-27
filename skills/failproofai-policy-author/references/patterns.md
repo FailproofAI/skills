@@ -6,6 +6,9 @@ end in `policies.mjs`. See `traps.md` §1.
 Multiple `customPolicies.add()` calls per file are fine and are the normal way to group
 related rules.
 
+The one exception is a Jev check (`semanticPolicies.add`): it works only in a published
+pack. The two-tier pattern, a regex floor that a Jev check can clear, is `jev.md` §6.
+
 ---
 
 ## From a complaint to something matchable
