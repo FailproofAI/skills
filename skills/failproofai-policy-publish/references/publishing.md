@@ -17,7 +17,8 @@ failproofai policies remove <pack-id>
 ## Source discovery
 
 `publish` recognizes policy files by their contents: they import FailproofAI and register
-one or more entries with `customPolicies.add`. Discovery is non-recursive. If discovery finds
+one or more entries with `customPolicies.add` or `semanticPolicies.add`. Discovery is
+non-recursive. If discovery finds
 multiple candidates, pass the intended source explicitly or organize the directory so the
 set is unambiguous.
 
@@ -70,3 +71,88 @@ pack as generally installable.
 - `failproofai policies add <owner>/<repo>` is the consumer install step.
 - Cloud policy publication and fleet rollout use `fp policies`, `fp fleet`, and
   `fp guardrails`; those belong to `fp-cloud-cli` and are not policy-pack publishing.
+
+## Jev checks in a pack
+
+Verified against failproofai 1.0.8-beta.0 (`src/hooks/pack-cli.ts`, grep `async function
+build`; `docs/policies/publish-a-pack.mdx`, *Jev checks in a pack*).
+
+### What the manifest carries
+
+A pack with checks writes them to the manifest's `semantic` array, beside `policies`, and
+sets `minCliVersion`. Each policy's `authority` and `reviewedBy` are copied into its
+manifest entry; a machine reads them from there, never from the code. A pack of checks alone
+has an empty `policies` array and is valid.
+
+### What `publish` refuses
+
+Every refusal exits 1 and builds nothing. The messages below are the CLI's own.
+
+| Refused | Message starts |
+|---|---|
+| a built-in check name, from a repository that is not FailproofAI's | `"destructive-deletion" is a name reserved for FailproofAI's own Jev checks` |
+| questions over the budget | `This pack's N semantic policies compile to … characters of questions, over the 9101 a machine leaves a pack from outside FailproofAI` |
+| `reviewedBy` naming a check the pack does not declare (when it declares any) | `One policy declares an authority this build cannot publish:` … `This pack declares Jev checks of its own, so reviewedBy may name only those.` |
+| `--min-cli-version` below 1.0.8-beta.0 | `--min-cli-version 1.0.7 is older than the first failproofai that runs a pack's Jev checks (1.0.8-beta.0)` |
+| `--min-cli-version` not plain semver | `--min-cli-version "…" is not a version that can be compared.` |
+| `alwaysOn` on a check | `… semantic policy #0 declares alwaysOn, which packs may not set` |
+| no `userCanOverride` | `… is missing userCanOverride, which has no default` |
+| an unknown precondition | `… names precondition "…", which this build does not have (always, protected_branch, in_git_repo, has_paths, paths_outside_project, system_or_root_paths)` |
+| probe id `exempt` or `user_asked` | `… uses the reserved probe id "user_asked"` |
+| two checks with one name | `two semantic policies are called "…"` |
+
+Also refused, as for any pack: `alwaysOn` on a regex policy, a policy name with `/`, a
+missing `description`, `category` or `match`, an entry that imports local files, and an entry
+that registers nothing. `publish` does not count checks, but `policies add` refuses a pack
+with more than 24 (the budget usually stops one first).
+
+### The budget, precisely
+
+One Jev request has room for 27,591 characters of questions. Every machine spends 18,490 on
+the 16 built-in checks first, so a pack from outside FailproofAI may use 9,101. The cost is
+the serialized question map: each probe's `instructions` and `criteria`, the `exempt` probe,
+and a generated `user_asked` question for a check with `userCanOverride: true`. Installed
+packs share what is left, so a pack that passed `publish` can still have a check dropped on a
+machine with another Jev pack installed. `policies add` names the dropped check; after that
+only the hook log does.
+
+### Reserved and contested names
+
+The 16 built-in names are reserved for FailproofAI's repositories, judged by the repository
+the pack is published to (or `--id` for a dry run with no `--repo`). A name two installed
+packs declare differently is asked for neither and clears nothing. `policies add` also
+refuses a `FailproofAI/…` pack id whose release does not come from a FailproofAI
+repository.
+
+### `minCliVersion`
+
+A CLI too old for Jev checks ignores `semantic` (1.0.7) or replaces the built-in checks with
+it (1.0.7-beta.x), so a pack with checks needs at least `1.0.8-beta.0`. `publish` writes that
+when `--min-cli-version` is absent and refuses anything lower. An older CLI that does read the
+field refuses to install the pack and prints `npm i -g "failproofai@>=<version>" &&
+failproofai update`. For an `enforce` pack with regex policies, a machine that cannot load it
+denies what those policies cover; a pack of Jev checks alone denies nothing on 1.0.8-beta.0,
+but older builds can deny every tool call, which is what the rollback reminder is for.
+
+### Try a dry-run pack before releasing
+
+`policies add` takes only `owner/repo[@tag]` and fetches
+`$FAILPROOFAI_PACK_BASE_URL/<owner>/<repo>/releases/download/<tag>/<asset>` (default
+`https://github.com`). To install a dry run locally, serve `dist-pack/` in that layout:
+
+```bash
+failproofai publish ./db-guard-policies.mjs --dry-run --id acme/db-guard --version 0.1.0
+d=pack-mirror/acme/db-guard/releases/download/0.1.0; mkdir -p "$d" && cp dist-pack/* "$d"
+python3 -m http.server 8765 -d pack-mirror &
+FAILPROOFAI_PACK_BASE_URL=http://127.0.0.1:8765 failproofai policies add acme/db-guard@0.1.0 --all
+```
+
+The tag must describe the version (a leading `v` is fine). Unset the variable afterwards: it
+redirects every pack fetch.
+
+### Observe and agent-scoped packs
+
+`--effect observe` records the pack's regex verdicts without enforcing them, and its Jev
+checks are **not asked at all**. A consumer who installs with `--cli <agent>` gets the checks
+asked only for those agents. Either way, a policy naming a check that is not asked stays
+hard.
