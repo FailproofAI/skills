@@ -5,6 +5,7 @@
 - [The policy object](#the-policy-object) · [Context](#context) · [Decisions](#decisions)
 - [Events](#events) · [Filtering by tool](#filtering-by-tool)
 - [Execution model](#execution-model) · [Configuration](#configuration)
+- [Semantic policies (Jev)](#semantic-policies-jev)
 
 > Source pointers below are paths inside the failproofai package. In a project that
 > installed it, they live under `node_modules/failproofai/`; in a source checkout,
@@ -13,9 +14,10 @@
 Everything here is exported from `src/index.ts` — that file is the entire public surface:
 
 ```ts
-export { customPolicies, getCustomHooks, clearCustomHooks } from "./hooks/custom-hooks-registry";
+export { customPolicies, semanticPolicies, getCustomHooks, getSemanticRegistrations, clearCustomHooks } from "./hooks/custom-hooks-registry";
 export { allow, deny, instruct } from "./hooks/policy-helpers";
-export type { PolicyContext, PolicyResult, CustomHook, PolicyDecision, PolicyFunction } from "./hooks/policy-types";
+export type { PolicyContext, PolicyResult, CustomHook, PolicyDecision, PolicyFunction,
+  PolicyAuthority, SemanticPolicyDeclaration, SemanticProbeDeclaration, SemanticToolClass } from "./hooks/policy-types";
 ```
 
 ## The policy object
@@ -30,8 +32,16 @@ export interface CustomHook {
     events?: HookEventType[];
   };
   fn: (ctx: PolicyContext) => PolicyResult | Promise<PolicyResult>;
+  authority?: "hard" | "reviewable";   // absent = hard
+  reviewedBy?: string[];               // semantic check names; see below
 }
 ```
+
+`authority`/`reviewedBy` matter only when Jev runs in enforce mode. A local file's are
+honoured directly. In a pack entry, `failproofai publish` validates them and copies them into
+the manifest, which is what machines read. A cloud-managed policy ignores them: its authority
+comes from the assignment (`policy-authority.ts`, grep `authorityDeclarationFor`). SKILL.md
+*Jev* says when to set them.
 
 Registered with `customPolicies.add(hook)`. That is the whole registration surface — no
 remove, no update, and **no validation of any kind** — `custom-hooks-registry.ts` (grep
@@ -81,9 +91,13 @@ export function instruct(reason: string): PolicyResult { ... } // reason require
 
 - **`allow`** — let it through. Also the correct return when your policy does not apply.
 - **`deny`** — block it. `reason` is shown to the agent and the user.
-- **`instruct`** — let it through but inject guidance into the agent's next turn. Only
-  properly supported on Claude Code, Devin and Antigravity; degrades to a stderr note on
-  Hermes, Goose, OpenClaw and Pi. Fine for a local skill; do not rely on it if the policy
+- **`instruct`** — let it through but inject guidance into the agent's next turn. Properly
+  supported on Claude Code, Devin and Antigravity. On Hermes' native plugin (1.0.6+, what
+  `failproofai update` migrates to) it blocks the first attempt in each model response with
+  `FAILPROOF INSTRUCTION (<policy>)` and the reason, and lets the next response's retry
+  through (`hermes-plugin/ledger.py`); so an "advisory" instruct costs a Hermes agent one
+  extra model round each time it fires. It degrades to a stderr note on Goose, OpenClaw, Pi
+  and Hermes' legacy shell hooks. Fine for a local skill; do not rely on it if the policy
   will be distributed.
 
 ### The `message` field is currently inert — sanitize works by blocking, not replacing
@@ -176,8 +190,52 @@ export interface HooksConfig {
 }
 ```
 
-Builtins are enabled **purely by presence** of the short name in `enabledPolicies` — there
-is no per-policy enabled/disabled object, and omission means off.
+`enabledPolicies` is read **only while no pack is installed on the machine**: the moment any
+pack is, a Jev pack included, those builtins stop loading (`handler.ts`, grep
+`packsInstalledHere`). Builtins ship as the FailproofAI pack; switch one on with
+`failproofai policies add FailproofAI/policies --policy <name>` (`builtins.md`).
+`policyParams` still applies to it, keyed by short name.
 
 Merged across three scopes, in precedence order: project `{cwd}/.failproofai/` → local →
 global `~/.failproofai/` (`hooks-config.ts`, grep `readMergedHooksConfig`).
+
+## Semantic policies (Jev)
+
+`semanticPolicies.add(decl)` — `policy-types.ts`, grep `interface SemanticPolicyDeclaration`.
+Read only by `failproofai publish`, so it takes effect **only in a pack**. Validated there by
+`parsePackSemanticPolicy` (`pack-manifest.ts`):
+
+| Field | Rule |
+|---|---|
+| `name` | `[A-Za-z0-9._-]{1,128}`, unique; reported as `semantic/<name>` |
+| `title` | ≤120 chars, past tense ("Tried to …") |
+| `appliesTo` | non-empty, from `shell` (Bash) · `write` (Write, Edit, MultiEdit, NotebookEdit) · `read` (Read, Glob, Grep, LS) · `network` (WebFetch, WebSearch) · `other`. A tool no class knows (`mcp__*`) is asked **every** check |
+| `mode` | `"deny"` blocks at evidence ≥0.85 and warns from 0.7; `"instruct"` only warns |
+| `userCanOverride` | required boolean, no default. `true`: a fired check is allowed when the user asked for the operation, and when Jev judges the call a step of the user's task a deny softens to a warning and a warning is dropped; an agent with a shell can forge that request. `false`: neither |
+| `precondition?` | a name from `PACK_PRECONDITION_NAMES`: `always`, `protected_branch`, `in_git_repo`, `has_paths`, `paths_outside_project`, `system_or_root_paths` |
+| `probes` | 1–6 of `{id, instructions ≤600, criteria?: {true ≤300, false ≤300}}`; `id` is `[a-z][a-z0-9_]{0,31}`, not `exempt` or `user_asked`. `instructions` states the harmful claim `criteria.true` names, never a question (SKILL.md *Jev*). Evidence is the **minimum** over probes |
+| `exempt?` | one probe; if it holds (≥0.5) the check does not fire |
+| `guidance` | ≤600 chars, shown to the agent as `<title> (semantic/<name>, p=…). <guidance>` |
+
+Limits: 24 checks per pack, and one question budget (`MAX_PACK_QUESTION_CHARS`, 27,591
+characters) shared by every installed pack, FailproofAI's first. `publish` holds a pack not
+from FailproofAI to the 9,101 left once `FailproofAI/jev-policies` (18,490,
+`JEV_POLICIES_QUESTION_CHARS`) is counted, installed or not (`pack-cli.ts`, grep
+`questionBudget`). On a machine an entry over the budget is dropped at load, named by
+`policies add` and the hook log (`was dropped: its questions need`).
+
+The npm package ships **no** Jev checks (1.0.8+; `pack-policies.ts` header): Jev asks only
+what installed packs declare. FailproofAI's 16, with each one's mode, tool classes and every
+probe's wording, are the `FailproofAI/jev-policies` pack, listed in `builtins.md` *Jev checks
+in FailproofAI/jev-policies*. A `reviewedBy` is honoured only for a check an installed pack
+declares (`effective-reviewers.ts`): from a local file, the 16 only where `jev-policies` is
+installed, or another installed pack's; a pack that declares checks may name only its own. A block needs something left that can deny
+once it clears (SKILL.md *Jev*); only the two marked "no override" (`credential-exfiltration`,
+`agent-config-tampering`) deny whatever the user asked.
+
+Several packs' checks are asked together, FailproofAI's first. A name two packs declare
+differently is asked for neither, and policies naming it stay hard (`effective-reviewers.ts`,
+grep `contestedSemanticNames`); byte-identical declarations are fine. The 16 names are reserved: a pack not from a FailproofAI repository that declares
+one is ignored for that name (`pack-policies.ts`, grep `isReservedClaim`). An observe pack's
+checks, and a `--cli` pack's for other agents, are not asked. On Hermes `user_said` is always
+empty (`intent.ts`, `PROMPT_CHANNELS.hermes`), so probes there must judge the command alone.

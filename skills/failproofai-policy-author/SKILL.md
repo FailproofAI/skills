@@ -5,7 +5,7 @@ description: |-
 
   Trigger when the user wants to:
   • act on an audit — turn `failproofai audit` findings into fixes, or ask which policies work;
-  • stop a recurring behaviour, in plain words or as "write a policy that blocks X";
+  • stop a recurring behaviour — "write a policy that blocks X", or a Jev check;
   • enforce a rules file — make a CLAUDE.md / AGENTS.md real instead of advisory;
   • enable an existing builtin — usually the right answer, checked first;
   • work from FailproofAI Cloud — findings, hooks that fail or over-deny, backtesting a draft.
@@ -132,6 +132,44 @@ repeating the verdict.
 If several are installed, the policy must hold on all of them or you state which one it
 covers. Authoring for whichever CLI you happen to be running inside, silently, is the bug.
 
+### When failproofai guards your own session
+
+If failproofai's hooks are installed for the CLI you are running in, as on any enrolled
+machine, its guard `block-failproofai-commands` judges your own tool calls, and nothing
+switches it off (`builtin-policies.ts`, grep `function blockFailproofaiCommands`). It denies:
+
+- **every `failproofai …` command**, however launched (`npx`, a path to its bin,
+  `$(failproofai --version)`): `policies --list`, `policies --install`, `policies add`,
+  `publish` even with `--dry-run`, `jev status`/`setup`/`test`, `audit`, and the raw
+  `npx -y failproofai --hook …`;
+- **writing under any `.failproofai` path**, the project's `.failproofai/policies/` and
+  `policies-config.json` as much as `~/.failproofai/`: with Write/Edit, or with any shell
+  command that is not a plain read (`mkdir`, `cp` into it, `>` onto it, `node … .failproofai/…`).
+
+It allows plain reads (`cat`, `ls`, `tail`, `grep`, `jq`; a `|` inside quotes on such a line,
+a `jq` filter's too, reads as a pipe and denies, so write `grep -e a -e b`), copying state
+*out* (`node` naming `~/.failproofai` is denied, so the readers below `cp` to `/tmp` first),
+every `fp …` command, and `node "$SKILL_DIR/scripts/test-policy.mjs" --policy <file>` for a
+file outside `.failproofai`.
+
+So draft and test in a folder of your own (`policy-drafts/`), and end with the operator's half
+as one block of exact commands, filled in:
+
+```bash
+# the operator's half: failproofai's guard denies these to the agent
+cp policy-drafts/block-foo-policies.mjs .failproofai/policies/
+failproofai policies --list
+```
+
+Add each builtin as its `policies add FailproofAI/policies --policy` line, and for a pack the
+`publish --dry-run`, `publish` (or the local install), `policies add` and `jev status` lines
+(*Jev*). A `policies-config.json` change goes in your reply as a diff, never as a file you
+write, `policy-drafts/` included: `agent-config-tampering`, a no-override Jev check, reads a
+written failproofai config as the agent changing its own guardrails and denies from 0.85 (a
+drafted `policies-config.json` scored 0.79 live, a warning). A deny reading *"Running failproofai
+CLI commands is blocked"* or *"Writing to failproofai's own state…"* is this guard, not Jev
+and not your policy. Do not retry it in another spelling; hand it over.
+
 ## Audit-driven triage
 
 **One finding, or all of them?** If the user names a single finding — by its policy name
@@ -196,10 +234,11 @@ cat ~/.failproofai/audit/dashboard.json 2>/dev/null || cat ~/.failproofai/audit-
 ```
 
 **The cache is the only source, and it can be arbitrarily old.** Check `cachedAt` before
-trusting anything in it:
+trusting anything in it (from a copy: the guard denies `node` naming `~/.failproofai`):
 
 ```bash
-node -e 'const j=require(process.env.HOME+"/.failproofai/audit/dashboard.json");
+cp ~/.failproofai/audit/dashboard.json /tmp/fp-audit.json
+node -e 'const j=require("/tmp/fp-audit.json");
 const age=(Date.now()-Date.parse(j.cachedAt))/864e5;
 console.log(`cached ${j.cachedAt} (${age.toFixed(1)} days ago), ${j.result.results.length} findings`)'
 ```
@@ -227,7 +266,8 @@ running it for them.
 not `.results[]`:
 
 ```bash
-node -e 'const j=require(process.env.HOME+"/.failproofai/audit/dashboard.json");
+cp ~/.failproofai/audit/dashboard.json /tmp/fp-audit.json
+node -e 'const j=require("/tmp/fp-audit.json");
 for (const c of j.result.results.sort((a,b)=>b.hits-a.hits))
   console.log([c.name.replace("failproofai/",""),c.source,c.hits,c.projects,c.enabledInConfig].join(" | "))'
 ```
@@ -249,12 +289,15 @@ every finding still claiming `enabledInConfig: true`. Observed exactly that way 
 Always re-read the current config before classifying:
 
 ```bash
+cat ~/.failproofai/policies/packs/installed.json 2>/dev/null  # packs, machine-wide
 cat .failproofai/policies-config.json 2>/dev/null          # project scope
 cat ~/.failproofai/policies-config.json 2>/dev/null        # global scope
 ```
 
-`enabledPolicies` is a **union** across project, local and global
-(`hooks-config.ts`, grep `enabledSet`) — not precedence. A policy is on if *any* scope lists it.
+With any pack installed, a builtin is on only if the FailproofAI pack's `enabled` list names
+it (`null` is all), and `enabledPolicies` is ignored (`references/traps.md` §7). With none,
+`enabledPolicies` is a **union** across project, local and global (`hooks-config.ts`, grep
+`enabledSet`) — not precedence. A policy is on if *any* scope lists it.
 
 **Scope matters more than it looks.** The audit spans every project on the machine, but a
 project-scope config protects only one. If findings span many projects and enforcement lives
@@ -320,9 +363,12 @@ always "match the raw name", with only builtin coverage lost. Check the harness'
 Run the attribution above first — a `DEAD` finding is not Bucket A, B or C; it is
 "unenforceable on the harness where it happened", and saying so is the correct output.
 
-**Bucket A — a builtin covers it and is off.** Do not write code. Add the short name to
-`enabledPolicies` in `.failproofai/policies-config.json`. This is the cheapest and most
-maintainable fix, and it is the right answer for most `source: "builtin"` findings.
+**Bucket A — a builtin covers it and is off.** Do not write code. Switch it on in the
+FailproofAI pack: `failproofai policies add FailproofAI/policies --policy <name>`, after one
+plain `policies add FailproofAI/policies` if it is not installed (`--policy` on a first
+install enables only the names given). Not `enabledPolicies`: it stops counting once any pack
+is installed, and a Jev check of your own needs one (`references/traps.md` §7). This is the cheapest and
+most maintainable fix, and it is the right answer for most `source: "builtin"` findings.
 
 **Bucket B — a builtin covers it and is already on.** No action. Report it so the user knows
 the finding is historical, not ongoing.
@@ -355,8 +401,9 @@ count on its own reads as one number to fix; `47 hits (claude 40, hermes 7 — D
 reads as the two different problems it actually is.
 
 For Bucket A, propose the
-config diff rather than silently editing — enabling enforcement changes what their agent is
-allowed to do. For a single explicit request ("turn on block-rm-rf"), just edit it.
+command rather than running it silently — enabling enforcement changes what their agent is
+allowed to do. For a single explicit request ("turn on block-rm-rf"), just run it, or, where
+failproofai guards your session, hand the operator the command.
 
 **Never widen scope on your own initiative.** These three are off-limits without the user
 asking for them in the current request:
@@ -366,6 +413,7 @@ asking for them in the current request:
 | `failproofai policies --install` at **user scope** | Wires hooks into *every* project on the machine, not the one they are in |
 | Editing `~/.failproofai/policies-config.json` | Global config; a deny there fires everywhere |
 | Setting `customPoliciesPath` globally | Silently activates policy files across all projects |
+| `failproofai policies add` | Packs, the FailproofAI one included, install machine-wide |
 
 A question — *"what should I do about my findings?"*, *"is this protected?"* — asks for an
 answer, not a change. Recommend the machine-wide fix in words and let them decide. Being
@@ -398,8 +446,11 @@ Two judgment calls to make before writing, and to state back to the user at the 
 
   Both flavors are harness-dependent. `deny()` only stops something on a **block** pair
   (*Pick an event the harness can actually enforce*), and `instruct()` is properly supported
-  only on Claude Code, Devin and Antigravity — it degrades to a stderr note on Hermes,
-  Goose, OpenClaw and Pi (`references/api.md`). Pick the mode, then confirm the pair.
+  only on Claude Code, Devin and Antigravity, plus Hermes through its native plugin (what
+  `failproofai config` and `failproofai update` install), where it blocks the first attempt in
+  each model response with the instruction and lets the next response's retry through. It
+  degrades to a stderr note on Goose, OpenClaw, Pi and Hermes' legacy shell hooks
+  (`references/api.md`). Pick the mode, then confirm the pair.
 - **Scope.** Project config protects one repo; user scope (`~/.failproofai/policies/`)
   applies everywhere. "My agent keeps doing X" usually means *everywhere*, not *here*.
 
@@ -410,7 +461,7 @@ Two judgment calls to make before writing, and to state back to the user at the 
 
 ### Measure builtin coverage against your real tool surface
 
-`references/builtins.md` says what the 39 builtins catch. It does **not** say whether your
+`references/builtins.md` says what the 40 builtins catch. It does **not** say whether your
 agents call the tools they filter on — and on a real fleet the answer is mostly no.
 
 ```bash
@@ -447,8 +498,16 @@ Two hazards the same data exposes:
 
 ### Check the builtins first
 
-Read `references/builtins.md`. All 39 builtins with their categories, default state, events
+Read `references/builtins.md`. All 40 builtins with their categories, default state, events
 and parameters. If one matches, enabling it beats writing a new file every time.
+
+If the complaint is that a builtin is **noisy** — `block-kubectl` denying `kubectl get` — try
+its `allowPatterns` param first where it has one: that trades nothing. The other fix is Jev:
+the builtins marked *reviewable by* are cleared on the calls Jev judges harmless, once
+`FailproofAI/jev-policies` is installed (the npm package ships no Jev checks, so without it
+every builtin is hard) and Jev runs in **enforce** mode (*Jev*). The price: an agent with a shell can forge the user's
+consent (`claude -p "…"`), and forged consent clears a reviewable deny — failproofai's
+`docs/reference/jev-intent.mdx`.
 
 Many builtins take `params` (allowlists, thresholds, protected branches) that go in the
 `policyParams` map — a parameterized builtin often covers a case that looks custom.
@@ -519,13 +578,223 @@ calls is dead on arrival, and a harness's own tools are exactly where that goes 
 
 ### Write the file
 
-Location: `.failproofai/policies/` in the project.
+Location: `.failproofai/policies/` in the project. Where the guard is on, draft it elsewhere
+and hand over the `cp` (*When failproofai guards your own session*).
 
 **The filename must end in `policies.js`, `policies.mjs`, or `policies.ts`.** A file named
 `block-foo.mjs` is silently skipped and enforces nothing. Name it `block-foo-policies.mjs`.
 This is the highest-frequency failure in the whole system — see `references/traps.md` §1.
 
 See `references/patterns.md` for worked examples per event type.
+
+### Jev: when no string decides it
+
+Some concerns are not in the command. `prisma migrate deploy` is the same string against
+localhost and against production; the difference is in `DATABASE_URL`, the branch, or what
+the user asked for. A regex that blocks every migration gets disabled, and one that allows
+them enforces nothing. **Jev** is failproofai's semantic evaluator: it asks a model yes/no
+questions about the call in front of it. The regex always stays the floor.
+
+| The concern turns on… | Write |
+|---|---|
+| a string in the call — a flag, a path, a tool name | a normal policy. Stop here |
+| something a forged "the user asked for it" must never unlock — irreversible actions, privilege escalation, running code fetched from the internet, pushes to protected branches, credential access | a normal policy, **kept hard** even where a matching Jev check exists. failproofai keeps `block-sudo`, `block-curl-pipe-sh` and `block-push-master` hard for this reason |
+| a string, but the regex is noisy on legitimate shapes | the regex plus `authority: "reviewable"` and `reviewedBy`, so Jev can clear the harmless calls |
+| something no string decides — the target, the intent, whether the user asked | a **semantic check** (`semanticPolicies.add`) shipped in a **pack**, beside a regex floor wherever it must hold without Jev |
+
+Jev reviews only `PreToolUse` and `PermissionRequest` calls the agent made, only where
+`~/.failproofai/jev.json` exists and is not `off`, and **only the checks an installed pack
+declares**. The npm package ships none (1.0.8+): FailproofAI's 16 are the
+`FailproofAI/jev-policies` pack, and a machine with no pack declaring checks never starts a
+review at all: no request, nothing cleared, whatever `jev status` says about the provider. Even then it **changes a decision only in
+`enforce` mode**: `observe`, which `jev setup` gives you by default, records what Jev would have
+done and applies the regex result, and so does every call Jev did not answer (a timeout, a
+transport error, a 429, 402 or 5xx, a malformed reply). Everywhere else a reviewable policy is
+its hard regex and a semantic check blocks nothing, so anything that must hold everywhere needs
+a regex floor. Read `references/traps.md` §10 before writing either.
+
+**Reviewable — let Jev clear a noisy block.** Two fields on the `customPolicies.add` you
+already have:
+
+```js
+  authority: "reviewable",
+  reviewedBy: ["production-infra-change"],   // semantic check names, not policy names
+```
+
+Jev clears the verdict only when **every** named check was asked about this call **and none
+answered deny** — a warning, an override and "no concern" all count as not deny. So pick the
+check by asking **"is there anything left that can deny?"**:
+
+- Its `appliesTo` and precondition must cover every shape the regex fires on: a check never
+  asked makes the block permanent. Tools no class knows (every `mcp__*`) are the exception:
+  they are asked every check, whatever `appliesTo` says.
+- It must model every one of those shapes, and asked is not modelled: a check asked whose
+  probes do not all hold answers "no concern", which clears the floor with no warning. So list
+  each shape the regex fires on, write its harmful case, and read every reviewer probe against
+  it: the probes of the 16 `FailproofAI/jev-policies` checks are in `references/builtins.md`
+  *Jev checks in FailproofAI/jev-policies*; your own pack's are in your file. A live floor on `rm`, `>` and
+  `git reset --hard`, reviewed by `destructive-deletion`: `echo hi > app.py` answered
+  `destroys` 0.91 but `irreplaceable` 0.34, so the unasked overwrite ran silently. That check asks about data that cannot be rebuilt; the floor was
+  about any unasked overwrite. Keep a shape no reviewer models in a hard policy of its own,
+  and keep a destructive floor hard unless every shape is modelled.
+- Once the block clears, something must still be able to deny: a deny-mode reviewer, or a
+  deny-mode check asked about the same call on its own (`block-read-outside-cwd` has only the
+  instruct `read-outside-workspace`, but `secret-exposure` and `credential-exfiltration` still
+  deny the read), or the policy only ever warned. Paired with instruct checks and nothing else,
+  a block becomes a warning.
+- A deny-mode check still stops denying, and so clears the floor, when an `exempt` probe
+  holds and, with `userCanOverride: true`, when its evidence is 0.7 to 0.85 (a warning; it
+  denies from 0.85), when the user asked for the operation (allowed) or when Jev judges the
+  call a step of the user's task (softened to a warning). The user's request can be forged by
+  an agent with a shell. Where the block must hold even then, the reviewer needs
+  `userCanOverride: false` (among the jev-policies checks only `credential-exfiltration` and
+  `agent-config-tampering`; while any deny-mode check with `false` warns, nothing on that call
+  is cleared), or keep the policy hard.
+
+Where `authority` and `reviewedBy` count: a local file honours them; in a pack entry
+`failproofai publish` validates them and copies them into the manifest, which is what machines
+read; a **cloud-managed policy is always hard** today.
+
+**Semantic — a question set, not code.** No `fn`, no `match`: Jev answers the probes, and
+the check fires only when every probe holds (its evidence is the lowest answer). A check that
+does not fire answers "no concern", which clears any floor it reviews, so **every probe must be
+true for the harmful call**, never for the harmless one. Put the "does it do X" probe first.
+
+Each probe's `instructions` **states the harmful claim**: a sentence true for the harmful call
+that says what `criteria.true` says. Never a question, never the harmless case. A push
+guard's probe ending "Does the branch name appear verbatim anywhere in `user_said`?", under
+`criteria.true` "NOT present", scored 0.45–0.73 live, hovering on the 0.7 fire line. Stated
+as below, the same payloads scored 0.04 for the branch the user named and 0.93–0.98 for
+branches they never mentioned:
+
+```js
+{ id: "branch_not_named",
+  instructions: "The branch this command pushes to (the one it names, or `facts.current_git_branch` for a bare `git push`) does not appear anywhere in `user_said`.",
+  criteria: { true: "The user never named that branch.", false: "The user named that branch." } }
+```
+
+When "the user did not ask" is the concern, make it a probe like that one, after the "does it
+do X" probe ("the command pushes commits to a remote"). Do not leave it to `userCanOverride:
+true`: that clears a fired check only when Jev scores `op_requested` ≥ 0.8 with `beyond_task`
+< 0.5, or `task_step` ≥ 0.8 with `beyond_task` < 0.3 (which drops a warning but only softens a
+deny; `decideV1`). Live Jev gave the push the user named explicitly `op_requested` 0.68 and
+0.76 and `task_step` 0.56 and 0.69, so a lone "pushes to a remote branch" check warns on the
+push that was asked for. The inverted probe fails the other way: "the branch appears in
+`user_said`" scored 0.96 on the requested push and 0.04 on an unasked `git push origin main`,
+which cleared its floor silently.
+
+```js
+import { semanticPolicies } from "failproofai";
+
+semanticPolicies.add({
+  name: "db-migration-on-production",   // what a reviewedBy names
+  title: "Tried to run a schema migration against a production database",   // past tense
+  appliesTo: ["shell"],                  // shell | write | read | network | other
+  mode: "deny",                          // blocks at p ≥ 0.85, warns from 0.7; "instruct" only warns
+  userCanOverride: true,                 // required; true = the user's request (real or forged) allows it and a task step softens it to a warning; false = neither
+  probes: [
+    { id: "applies_migration",
+      instructions: "The command in `agent_request` APPLIES database schema migrations: `prisma migrate deploy`, `prisma db push`, `knex migrate:latest`, `alembic upgrade`, `rails db:migrate`, `flyway migrate`, `sequelize db:migrate`, or an equivalent, however the binary is spelled or pathed.",
+      criteria: { true: "Running it would change a database schema.",
+                  false: "It only creates, lists, checks or previews migrations (`migrate dev --create-only`, `status`, `--dry-run`, `alembic history`)." } },
+    { id: "production_target",
+      instructions: "The database it targets is production or shared, or cannot be told from the command, its flags, or the environment variables set inline on it (`DATABASE_URL=...`, `RAILS_ENV=...`, `--env`).",
+      criteria: { true: "Production, shared, or unknown database.",
+                  false: "Clearly local or throwaway: localhost, 127.0.0.1, a docker-compose service, a sqlite file, or an env named dev, test or local." } },
+  ],
+  guidance: "Run migrations against a local or staging database, or hand the command to a human to run against production.",
+});
+```
+
+**On Hermes, write every probe about the command, never about the user's words.** Hermes
+hands failproofai no prompt (`semantic/intent.ts`, `PROMPT_CHANNELS.hermes` is all null), so
+`user_said` is always empty there, the task and `user_asked` questions are never asked, and
+`userCanOverride` changes nothing. A probe like "the recipient is not named in `user_said`"
+is true on every Hermes call and blocks the legitimate ones too. Judge what Jev can see: the
+command in `agent_request` and `facts`. Hermes tools no class knows (`execute_code`,
+`browser_*`, composio `OUTLOOK_*`, every MCP tool) are asked every check, one Jev request per
+call. Name the sender or script outright in the first probe ("`chetak-send.sh` sends a
+WhatsApp message"): Jev scored a bare mention 0.78, a warning instead of a deny, and 0.88
+once the probe said so.
+
+`precondition` is a **name**, not code — `always`, `protected_branch`, `in_git_repo`,
+`has_paths`, `paths_outside_project`, `system_or_root_paths`. Probes should talk about what
+Jev is shown: `agent_request`, `user_said`, and `facts` (`cwd`, `project_root`,
+`current_git_branch`, `paths[]`). Set `userCanOverride: false` for anything a forged "the user
+asked for it" must not unlock, the way `credential-exfiltration` does. A suspected prompt
+injection needs no setting: it already turns any check that fired into a deny.
+
+**`semanticPolicies.add` does something only inside a pack.** In `.failproofai/policies/` or
+a cloud policy it registers into a list nothing reads; the hook log says so once per file
+(`… never asked here`). **An installed pack's checks are the only questions Jev asks**: there
+are no built-in ones to join. Several packs' checks are asked together, FailproofAI's first.
+So a `reviewedBy` is honoured only for a check some installed pack declares: from a local
+file it may name `FailproofAI/jev-policies`' 16 only where that pack is installed (otherwise
+the policy stays hard); inside a pack that declares checks, `publish` accepts only its own.
+The 16 names are reserved: another pack's check named like one is ignored, never asked. An
+observe pack's checks (`publish --effect observe`) are never asked, and a pack added with
+`--cli` has its checks asked only for those agents; a policy naming a check that is not asked
+stays hard. Every installed pack shares one question budget of 27,591 characters.
+`publish` holds a pack not from FailproofAI to the 9,101 left once `jev-policies` (18,490)
+is counted, whether or not the author has it installed, so a pack can sit beside it; keep
+a pack's questions under about 9k (the example check is 1,601; a two-check pack about
+3,000). An entry over the budget on a machine is dropped at load: `failproofai policies add`
+names it, and so does the hook log (`was dropped: its questions need`).
+`references/patterns.md` has the two-tier entry file. Validate it, then release it:
+
+```bash
+failproofai publish db-guard.policies.mjs --dry-run --version 0.1.0   # validates, writes dist-pack/, publishes nothing
+failproofai publish db-guard.policies.mjs --repo acme/db-guard --version 0.1.0
+```
+
+Always pass `--dry-run` to validate: without it, a publish with no `--repo` takes the
+repository from the git origin, if there is one, and releases for real (with neither it is a
+dry run). The dry run is the validator: it rejects a bad field, an unknown precondition, an
+unknown `reviewedBy` name or a check over the ~9k budget, and prints
+`N semantic policies for Jev (… characters of questions), asked by Jev wherever it installs`
+and `Requires failproofai 1.0.8-beta.0 or newer`: a pack with checks gets that
+`--min-cli-version` by default, since older CLIs cannot read the checks; pass a higher one
+if you rely on something newer. Nothing in a pack is on by default: install with
+`failproofai policies add <owner>/<repo> --all`, or set `defaultEnabled: true` on the policy.
+
+**Installing a dry-run pack on this machine.** `policies add` takes only `owner/repo[@tag]`
+fetched from `$FAILPROOFAI_PACK_BASE_URL/<owner>/<repo>/releases/download/<tag>/` (default
+`https://github.com`); a path such as `./dist-pack/…` fails `unsafe owner "."`. So serve
+`dist-pack/` as that layout. Name the pack with `--id` (a dry run otherwise calls it
+`local/<folder>`) and the tag with `@` (it must be the version, `v` optional):
+
+```bash
+failproofai publish db-guard.policies.mjs --dry-run --id acme/db-guard --version 0.1.0
+d=/tmp/packs/acme/db-guard/releases/download/0.1.0; mkdir -p $d && cp dist-pack/* $d
+python3 -m http.server 8765 -d /tmp/packs &
+FAILPROOFAI_PACK_BASE_URL=http://127.0.0.1:8765 failproofai policies add acme/db-guard@0.1.0 --all
+# one agent only: append --cli hermes (or claude, codex, …) to scope the pack and its checks
+```
+
+The variable redirects every pack fetch, so run `policies add FailproofAI/policies` without it.
+Re-publishing a fixed version and re-running `policies add <id>@<new-version>` replaces the
+installed one; `failproofai policies remove <id>` uninstalls it and its checks stop being asked
+at once.
+
+**Verify both tiers.** `test-policy.mjs --policy` tests the floor alone: it runs in a sandbox
+HOME with the legacy evaluator, so no `jev.json` or daemon brings Jev in — test that both ways
+as below. Without `--policy` it runs against the real config, where a daemon can still answer
+with Jev. Jev's half has no offline test: `failproofai jev test` checks the connection only
+and never touches your policies. Roll out in observe mode first — `failproofai jev setup --provider
+failproofai --mode observe` (FailproofAI Cloud) or `failproofai jev setup --provider <kind>
+--key-stdin --mode observe < key-file` (your own key) — then read:
+
+- `failproofai jev status` — the mode, how many enabled builtin and pack policies are
+  reviewable (policies from your own files are not counted), and the last 24 hours' `cleared`
+  and `would have cleared (observe)`;
+- `~/.failproofai/state/semantic/verdicts.jsonl` — answers keyed `<check>.<probe>`, the only
+  proof a probe was asked. For a local file, that and `jevCleared` in
+  `~/.failproofai/hook-activity/current.jsonl` are the evidence.
+
+Nothing is cleared and no check blocks until `failproofai jev setup --mode enforce`. Do not
+report the semantic tier as live until `jev status` shows `enforce`. Where the guard is on,
+`publish`, `policies add`, `jev setup` and `jev status` are the operator's to run; you can
+still `tail` both files above.
 
 ### Verify it actually fires
 
@@ -570,7 +839,7 @@ to this skill's own folder — the directory you were told to read this file fro
 
 ```bash
 node "$SKILL_DIR/scripts/test-policy.mjs" \
-  --policy .failproofai/policies/my-policies.mjs \
+  --policy policy-drafts/my-policies.mjs \
   --event PreToolUse --tool Bash \
   --input '{"command":"sudo rm -rf /tmp/x"}' --expect deny
 ```
@@ -614,7 +883,8 @@ cannot affect the result. It also **renames the file if it violates the loader c
 
 Exit code is 1 if any `--expect` fails, so it drops straight into a script.
 
-Underneath it is just the documented stdin protocol, if you need it by hand:
+Underneath it is just the documented stdin protocol, if you need it by hand (a `failproofai`
+command, so the operator's where the guard is on):
 
 ```bash
 echo '{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"sudo rm -rf /tmp/x"},"session_id":"test","transcript_path":"/dev/null","cwd":"'"$PWD"'"}' \
@@ -643,6 +913,7 @@ mistake produced a false FAIL during testing. `test-policy.mjs` handles all of t
 To test without touching the project's own config, build a throwaway project directory with
 its own `.failproofai/policies/` and `policies-config.json`, and point the payload's `cwd`
 at it. Project-scope discovery keys off that `cwd`, so the policy loads in isolation.
+`test-policy.mjs --policy` builds that directory for you, and is the form the guard allows.
 
 Test both directions: a payload that **should** be denied, and a near-miss that **should**
 be allowed. A policy that denies everything passes the first test.
@@ -767,7 +1038,7 @@ actually disables** convention policies), or hooks not being installed for the C
 Verify with:
 
 ```bash
-failproofai policies --list
+failproofai policies --list        # the operator's, where the guard is on
 ```
 
 **That is where this skill stops.** The split is clean, and both halves are shipped work:
@@ -779,7 +1050,9 @@ failproofai policies --list
 | cloud rollout | *which fleet machines run a Cloud policy version, and what did it block?* | `fp-cloud-cli` |
 
 Everything past a proven local file is the deploy half: minting a version with
-`fp policies publish` (which **deploys nothing** on its own), choosing `enforce` vs
+`fp policies publish` (which **deploys nothing** on its own, and unlike the dashboard does
+not refuse Jev fields: strip `semanticPolicies.add`, `authority` and `reviewedBy` first, since
+a cloud policy never reads them), choosing `enforce` vs
 `observe`, `fp fleet deploy`, rollback, and reading `fp guardrails` to see the rule fire on
 real traffic. Those are shipped commands — if you find yourself about to say deployment is
 "dashboard work" or "not exposed by the CLI", that is wrong, and it tells the reader to stop
@@ -819,7 +1092,7 @@ enforce may already be enforced. Check `references/builtins.md` (with params —
 read the project's existing custom policies:
 
 ```bash
-ls .failproofai/policies/ && grep -h "name:\|description:" .failproofai/policies/*policies.mjs
+ls .failproofai/policies/ && grep -h -e name: -e description: .failproofai/policies/*policies.mjs
 ```
 
 A rule already covered goes in the report as covered — writing a duplicate policy means two
@@ -977,3 +1250,4 @@ Print the `issues comment-add` and `audits resolve` commands and let the user ru
 FailproofAI Cloud's confirms **auto-skip on a non-TTY, which is how you run it**, so a wrong id
 resolves someone else's finding on a shared board with no prompt — and triage needs
 `audits:write`, which a read-only account lacks. See `references/cloud.md`.
+

@@ -25,14 +25,15 @@ candidate is `prefer-package-manager` with params:
 
 ```json
 {
-  "enabledPolicies": ["prefer-package-manager"],
   "policyParams": {
     "prefer-package-manager": { "allowed": ["bun"], "blocked": ["npm", "yarn"] }
   }
 }
 ```
 
-(Remember: params for a policy absent from `enabledPolicies` do nothing — `traps.md` §7.)
+switched on with `failproofai policies add FailproofAI/policies --policy prefer-package-manager`.
+Params for a policy that is off do nothing, and `enabledPolicies` counts only on a machine
+with no pack installed (`traps.md` §7).
 
 **But check the builtin's matching breadth before enabling it.** A builtin can be broader
 than the rule. `prefer-package-manager`'s npm matcher is a bare `\bnpm\b`, so with

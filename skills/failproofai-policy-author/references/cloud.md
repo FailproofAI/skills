@@ -220,15 +220,17 @@ From here it is *The authoring core* in SKILL.md, unchanged — **check builtins
 the file `*policies.mjs`, test both directions with `scripts/test-policy.mjs`. FailproofAI Cloud
 changes where the work comes from, not how a policy gets written.
 
-"Plugging it in" is two concrete edits in the target project, and neither touches FailproofAI Cloud:
+"Plugging it in" is two concrete steps on the target machine, and neither touches FailproofAI Cloud.
+On an enrolled machine failproofai's guard denies you both: draft in `policy-drafts/` and
+hand the operator the `cp` and the pack command (SKILL.md *When failproofai guards your own session*).
 
 ```
 .failproofai/policies/<name>-policies.mjs     the custom policy (filename convention — traps.md §1)
-.failproofai/policies-config.json             `enabledPolicies` for any builtin that covers a finding
+failproofai policies add FailproofAI/policies --policy <name>   any builtin that covers a finding (traps.md §7)
 ```
 
 Nothing about *this* needs a FailproofAI Cloud permission — a failproofai policy is a local file
-plus a config entry, and that is the whole story for one machine. It is **not** the whole story
+plus a pack switch, and that is the whole story for one machine. It is **not** the whole story
 for a fleet: `fp policies publish`, `fp fleet deploy` and `fp guardrails` are shipped commands
 that carry the same rule to every machine and show it firing, and they need `policies:write`.
 That Cloud rollout path belongs to `fp-cloud-cli` — hand off rather than assuming the local
@@ -237,8 +239,9 @@ edit is all there is. Then prove both local edits took effect, because neither i
 ```bash
 export SKILL_DIR=/path/to/skills/failproofai-policy-author   # this skill's own folder
 
-# the custom file actually loads (fail-open hides a file that never loaded — traps.md §3)
-node "$SKILL_DIR/scripts/test-policy.mjs" --policy .failproofai/policies/<name>-policies.mjs \
+# the custom file actually loads (fail-open hides a file that never loaded — traps.md §3);
+# test the draft: the guard denies this on the installed copy's path
+node "$SKILL_DIR/scripts/test-policy.mjs" --policy policy-drafts/<name>-policies.mjs \
   --cwd . --event PreToolUse --tool Bash --input '{"command":"<should-deny case>"}' --expect deny
 
 # an enabled builtin fires against the REAL project config (omit --policy)
