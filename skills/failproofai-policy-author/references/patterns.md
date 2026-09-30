@@ -206,7 +206,7 @@ signals which:
 | Prefix | Helper | Effect | Use when |
 |---|---|---|---|
 | `block-*` (17) | `deny()` | action never runs | irreversible or unsafe, no legitimate case |
-| `warn-*` (10) | `instruct()` | action runs; agent told to check with the human first | risky but sometimes correct — needs a human, not a wall |
+| `warn-*` (11) | `instruct()` | action runs; agent told to check with the human first | risky but sometimes correct — needs a human, not a wall |
 | `sanitize-*` (5) | raw deny object | output **blocked** before the model sees it (`message` is inert — traps.md §9) | secrets in tool output |
 
 Name your policy with the matching prefix. A reader should know the mode from the name.
@@ -253,6 +253,62 @@ This is the mode to reach for when the answer to "should this ever be allowed?" 
 Hermes, Goose, OpenClaw and Pi it degrades to a stderr note the agent never sees — so on
 those, oversight silently becomes no oversight. If the policy must hold everywhere, use
 `deny()` with a reason explaining how to proceed.
+
+## Two tiers — a regex floor Jev can clear
+
+For a concern a string half-decides: the regex catches every shape, and a semantic check
+decides which of them are harmless. Here, applying a schema migration is blocked unless Jev
+judges the target local. The entry file is the `db-migration-on-production` check from
+SKILL.md *Jev*, plus this floor:
+
+```js
+// db-guard.policies.mjs — a PACK entry: semanticPolicies.add does nothing anywhere else
+import { customPolicies, semanticPolicies, allow, deny } from "failproofai";
+
+semanticPolicies.add({ name: "db-migration-on-production", /* … as in SKILL.md */ });
+
+const MIGRATE = /\b(prisma\s+(migrate\s+deploy|db\s+push)|knex\s+migrate:latest|alembic\s+upgrade|rails\s+db:migrate|flyway\s+migrate|sequelize(-cli)?\s+db:migrate)\b/;
+
+customPolicies.add({
+  name: "block-db-migrate",
+  description: "Block applying schema migrations from the agent",
+  match: { events: ["PreToolUse"] },       // Jev reviews PreToolUse and PermissionRequest only
+  authority: "reviewable",
+  reviewedBy: ["db-migration-on-production"],   // a pack that declares checks may name only its own
+  fn: async (ctx) => {
+    if (ctx.toolName !== "Bash") return allow();
+    const command = String(ctx.toolInput?.command ?? "");
+    return MIGRATE.test(command) ? deny("Applying schema migrations is blocked; run it yourself.") : allow();
+  },
+});
+```
+
+Why it is shaped this way:
+
+- **The check models every shape the floor fires on.** `appliesTo: ["shell"]` covers the only
+  tool the floor matches, there is no precondition to miss, `applies_migration` names the
+  same commands, and both probes are true for the harmful case, a migration against
+  production. A narrower check would leave some blocks permanent (`traps.md` §10.3).
+- **Something is left that can deny, but not always.** The check is deny-mode, so a
+  production target Jev is sure of (p ≥ 0.85) still blocks. With `userCanOverride: true` it
+  does not when the user asked for the migration (allowed) or Jev judges it a step of the
+  user's task (a warning), and either one clears the floor as well. An agent with a shell can
+  forge that request. Set `userCanOverride: false` if a production migration must block
+  whatever the task says.
+- **Local, it is cleared; production, it is not.** Run end to end in observe mode against a
+  stub Jev: with the check answering "local", the floor's deny was recorded in
+  `jevCleared`; answering production (p=0.95), Jev denied with the check's title and
+  guidance. With no recorded user message the task questions are not asked, so this run did
+  not exercise the override.
+- **Its check is the only one Jev asks** where it installs, unless `FailproofAI/jev-policies`
+  is there too; `publish` still holds it to the ~9k that pack leaves, so its 1,601 characters
+  fit either way (`traps.md` §10.6).
+
+Test the floor with `test-policy.mjs --policy` as usual — it runs without Jev, so it sees
+exactly the hard regex. Then `failproofai publish db-guard.policies.mjs --dry-run --version
+0.1.0` validates both tiers and writes `dist-pack/` without publishing; it prints `1 semantic
+policies for Jev (1601 characters of questions), asked by Jev wherever it installs`. Leave
+out `--dry-run` and a missing `--repo` is taken from the git origin, and the release is real.
 
 ## Nudge toward a better tool
 

@@ -3,7 +3,7 @@ name: failproofai-policy-publish
 description: |-
   Package policies written with FailproofAI and publish them as an installable policy pack on GitHub. Use after `failproofai-policy-author` when the policy works locally and the user wants to share, version, release, or install it through `failproofai publish` and `failproofai policies add owner/repository`.
 
-  Covers initializing a pack, validating it locally, choosing policy metadata and defaults, Git/GitHub prerequisites, dry runs, publishing release assets, previewing the release, and verifying installation on a clean machine.
+  Covers initializing a pack, validating it locally, choosing policy metadata and defaults, Git/GitHub prerequisites, dry runs, publishing release assets, previewing the release, and verifying installation on a clean machine. Also packs that carry Jev semantic checks: what publish refuses, the question budget, minCliVersion, and what consumers see.
 
   NOT for writing the policy logic (`failproofai-policy-author`) or deploying Cloud-managed policy versions to a fleet (`fp-cloud-cli`).
 ---
@@ -23,8 +23,8 @@ guardrails, and rollback belong to `fp-cloud-cli`.
 ## Start with an authored policy
 
 If no working policy exists yet, use `failproofai-policy-author` first. Come back when the
-policy registers through `customPolicies.add(...)` and has passing allow and deny/instruct
-cases.
+policy registers through `customPolicies.add(...)` (or, for a Jev check,
+`semanticPolicies.add(...)`) and has passing allow and deny/instruct cases.
 
 Resolve the publishing CLI:
 
@@ -141,6 +141,7 @@ Useful overrides:
 
 `effect` applies to the whole pack. `observe` records decisions but blocks nothing;
 `enforce` applies policy verdicts. Choose deliberately and state it in the handoff.
+An `observe` pack's Jev checks are never asked at all (*Packs that carry Jev checks*).
 
 Publishing creates or reuses the release and replaces same-named release assets. It does not
 push the Git source and does not install the pack on any machine.
@@ -171,6 +172,74 @@ Selection can be narrowed with `--policy`, `--category`, or expanded with `--all
 interactive install lets the user choose agents and policies. Never claim publication was
 successful until `policies show` can read the release and an install can verify its digest.
 
+## Packs that carry Jev checks
+
+A pack is the only way a Jev check (`semanticPolicies.add`) reaches a machine. In a local
+policy file it is never asked (failproofai logs that when it loads the file), so step 2
+cannot prove a check: install a dry run on this machine instead (`references/publishing.md`,
+*Try a dry-run pack before releasing*). Discovery finds a file that calls
+`customPolicies.add` **or** `semanticPolicies.add`, so a pack of Jev checks alone is
+publishable. Author the checks with `failproofai-policy-author` first (its *Jev: when no
+string decides it* section).
+
+Since failproofai 1.0.9 the CLI ships no checks of its own. FailproofAI's 16 are the
+`FailproofAI/jev-policies` pack, installed like any other, and a machine asks only the checks
+its installed `enforce` packs declare. Yours are asked beside theirs, never instead of them.
+
+**Always validate with `--dry-run`.** It runs the loader's own rules and publishes nothing.
+Without it, `publish` takes the repository from `--repo` or the git origin and releases for
+real. With neither it only builds (in an interactive terminal it first asks where to
+publish).
+
+```bash
+failproofai publish ./db-guard-policies.mjs --dry-run --id acme/db-guard --version 0.1.0
+```
+
+Expect, beside the usual asset paths (the counts are your file's):
+
+```text
+Built acme/db-guard@0.1.0 — <n> policies, <n> on by default.
+  <n> semantic policies for Jev (<chars> characters of questions), asked by Jev wherever it installs.
+  Requires failproofai 1.0.8-beta.0 or newer.
+```
+
+With `--effect observe` the Jev line ends `not asked where it installs: Jev asks only the
+checks of packs that enforce.` instead. A pack of Jev checks alone also prints the
+**rollback reminder**, and the real publish repeats it: tell users to remove the pack
+(`failproofai policies remove <id>`) before rolling a machine back to an older failproofai,
+which can deny every tool call over a pack it will not load. Put that sentence in the
+release notes.
+
+What `publish` refuses for a pack with checks (the exact messages are in
+`references/publishing.md`):
+
+- a check named like one of the 16 `FailproofAI/jev-policies` checks (`destructive-deletion`,
+  `secret-exposure`, …) unless the repository is FailproofAI's;
+- a question set over the **budget**: 9,101 characters for a pack from outside FailproofAI
+  (27,591 per request, minus the 18,490 `jev-policies` takes first where both are
+  installed). It holds you to that whether or not you have `jev-policies` installed;
+- a `reviewedBy` naming a check the pack does not declare, once it declares any; an
+  `authority` other than `"hard"` / `"reviewable"`;
+- `alwaysOn` on a check or a policy;
+- `--min-cli-version` below `1.0.8-beta.0`, or not plain semver. With none, `publish`
+  writes `1.0.8-beta.0` into the manifest;
+- a malformed check: missing `userCanOverride` (it has no default), no `appliesTo` or an
+  unknown tool class, a `mode` other than `deny` / `instruct`, an unknown `precondition`, no
+  probes or more than 6, a reserved probe id (`exempt`, `user_asked`), a duplicate name, or a
+  field over its length cap.
+
+**What consumers see.** `failproofai policies show <owner>/<repo>` counts the checks in its
+header, prints `Requires failproofai 1.0.8-beta.0 or newer.`, and lists them in a section
+headed `Jev checks — <n> · not selectable · only where Jev is configured`: each check's mode,
+its name, and which of the pack's own policies it `reviews`. `failproofai policies add`
+prints `<n> Jev checks, asked by Jev on every tool call they apply to` (`…, for hermes only`
+under `--cli hermes`) and `They apply only where you configured Jev (failproofai jev status)`,
+plus a `▲` line for each check this machine will leave out (the shared budget, or a reserved
+or contested name). The checks are not selectable: `--policy` cannot name one and
+`failproofai policies` never lists them. They do nothing until the consumer configures Jev
+(`failproofai jev setup`) and switches it to `enforce`; `failproofai jev status` shows the
+mode.
+
 ## Safety and authorization
 
 `--init`, local installation, `--dry-run`, and `policies show` are local/read-only enough to
@@ -190,6 +259,8 @@ Report:
 - pack id and GitHub repository;
 - version/tag and source commit;
 - `enforce` or `observe`;
+- for a pack with Jev checks: how many, their question cost, `minCliVersion`, and whether
+  the rollback reminder applies;
 - dry-run result and generated asset directory;
 - release URL if actually published;
 - preview/install verification performed;
