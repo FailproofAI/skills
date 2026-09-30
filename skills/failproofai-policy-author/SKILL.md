@@ -621,9 +621,11 @@ already have:
   reviewedBy: ["production-infra-change"],   // semantic check names, not policy names
 ```
 
-Jev clears the verdict only when **every** named check was asked about this call **and none
-answered deny** — a warning, an override and "no concern" all count as not deny. So pick the
-check by asking **"is there anything left that can deny?"**:
+Jev clears the verdict only when **every** named check was asked about this call **and each
+answered "no concern", was overridden by the user's request, or was a deny the user's task
+softened to a warning**. A deny keeps the block, and so does a warning nobody consented to; a
+warning from a deny-mode check also cancels every other clear on that call. So pick the check
+by asking **"is there anything left that can deny?"**:
 
 - Its `appliesTo` and precondition must cover every shape the regex fires on: a check never
   asked makes the block permanent. Tools no class knows (every `mcp__*`) are the exception:
@@ -641,15 +643,15 @@ check by asking **"is there anything left that can deny?"**:
   deny-mode check asked about the same call on its own (`block-read-outside-cwd` has only the
   instruct `read-outside-workspace`, but `secret-exposure` and `credential-exfiltration` still
   deny the read), or the policy only ever warned. Paired with instruct checks and nothing else,
-  a block becomes a warning.
+  the block holds while one of them warns and goes, with nothing in its place, whenever they
+  find nothing or the user asked.
 - A deny-mode check still stops denying, and so clears the floor, when an `exempt` probe
-  holds and, with `userCanOverride: true`, when its evidence is 0.7 to 0.85 (a warning; it
-  denies from 0.85), when the user asked for the operation (allowed) or when Jev judges the
-  call a step of the user's task (softened to a warning). The user's request can be forged by
-  an agent with a shell. Where the block must hold even then, the reviewer needs
-  `userCanOverride: false` (among the jev-policies checks only `credential-exfiltration` and
-  `agent-config-tampering`; while any deny-mode check with `false` warns, nothing on that call
-  is cleared), or keep the policy hard.
+  holds and, with `userCanOverride: true`, when the user asked for the operation (allowed) or
+  when Jev judges the call a step of the user's task (softened to a warning). Between 0.7 and
+  0.85 it warns without consent, which keeps the floor (it denies from 0.85). The user's
+  request can be forged by an agent with a shell. Where the block must hold even then, the
+  reviewer needs `userCanOverride: false` (among the jev-policies checks only
+  `credential-exfiltration` and `agent-config-tampering`), or keep the policy hard.
 
 Where `authority` and `reviewedBy` count: a local file honours them; in a pack entry
 `failproofai publish` validates them and copies them into the manifest, which is what machines
@@ -682,6 +684,18 @@ deny; `decideV1`). Live Jev gave the push the user named explicitly `op_requeste
 push that was asked for. The inverted probe fails the other way: "the branch appears in
 `user_said`" scored 0.96 on the requested push and 0.04 on an unasked `git push origin main`,
 which cleared its floor silently.
+
+Two more conditions are checked in code, not by the model, and both are about shell commands.
+The `op_requested` route clears a command only when **every** target it names appears in what
+the user typed or in the agent message they replied to (a non-shell tool's fields count as one
+target). After "clean the build", `rm -rf build/ ~/important` is not cleared, and the
+`task_step` route does not soften it either, because the user named some of its targets and
+not all. And a command the local scan cannot read whole is cleared or softened by **neither**
+route: any `$` expansion (`$VAR`, `$1`, `${…}`, `$(…)`), backticks, `$'…'`, a glob (`*`, `?`,
+`[…]`), brace expansion, a heredoc or here-string, `eval` or `sh -c`, or an unclosed quote.
+Jev's own deny or warning stands and a reviewable floor keeps denying, so no request clears
+`rm -rf build/*`. If the stored user message was cut for length, the target check is skipped,
+not failed. Test consent with plain commands.
 
 ```js
 import { semanticPolicies } from "failproofai";

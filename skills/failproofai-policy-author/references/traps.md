@@ -264,7 +264,7 @@ most (`semantic/combine.ts`, grep `function clears`): a reviewable verdict is cl
    branch appears in `user_said`") fires on the requested push and clears the unrequested
    one, and a probe whose question asks the opposite of its `criteria.true` hedges near the
    0.7 line (SKILL.md *Jev*).
-5. **Nothing left that can deny turns a block into a warning.** The test is "is there anything
+5. **Nothing left that can deny lets a blocked call run.** The test is "is there anything
    left that can deny" once the block clears, and it passes three ways: a deny-mode reviewer; a
    deny-mode check asked about the same call on its own, since Jev's own deny still joins the
    most-severe merge (`block-read-outside-cwd` has only the instruct `read-outside-workspace`,
@@ -273,13 +273,13 @@ most (`semantic/combine.ts`, grep `function clears`): a reviewable verdict is cl
    is instruct and nothing else covers the concern.
 
    Deny-mode alone is not enough. A deny-mode check stops denying — and so clears — when its
-   `exempt` probe holds and, with `userCanOverride: true`, at evidence 0.7 to 0.85 (a
-   warning), when the user asked for the operation or when Jev judges the call a step of the
-   user's task. An agent with a shell can forge the user's request (`claude -p`,
+   `exempt` probe holds and, with `userCanOverride: true`, when the user asked for the
+   operation or when Jev judges the call a step of the user's task. (Its warning at evidence
+   0.7 to 0.85 is not a clear: a warning nobody consented to keeps the floor and cancels every
+   other clear on the call.) An agent with a shell can forge the user's request (`claude -p`,
    `codex exec`), so a block that must hold even then needs a `userCanOverride: false`
-   reviewer (among the jev-policies checks, only `credential-exfiltration` and `agent-config-tampering`;
-   while any deny-mode check with `false` warns, nothing on that call is cleared), or it stays
-   hard.
+   reviewer (among the jev-policies checks, only `credential-exfiltration` and
+   `agent-config-tampering`), or it stays hard.
 6. **No pack, no questions — and a pack's limits fail quietly.** The npm package ships no Jev
    checks (1.0.8+). With no installed pack declaring one, Jev never starts a review, and every
    `reviewable` policy is hard, the FailproofAI pack's included, until `failproofai policies
