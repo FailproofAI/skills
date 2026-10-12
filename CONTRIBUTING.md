@@ -61,9 +61,18 @@ metadata:
 
 ## Synced skills (don't hand-edit these)
 
-Three skills are **mirrored from another repo** and must not be edited here —
+Several skills are **mirrored from another repo** and must not be edited here —
 edits would be overwritten on the next sync. Their source of truth is listed in
 the README "Skills" table.
+
+The four mirrored from `FailproofAI/agenteye` → `agent/skills/<name>/`
+(`failproofai-eval-brainstorm`, `failproofai-eval-author`,
+`failproofai-alert-author`, `failproofai-audit-author`) are a **subset** of
+their upstream folder: files that only make sense inside the dashboard assistant
+(its tool map, `references/dashboard.md`, and the drafters' own prompt
+contracts, `references/compose.md`) stay upstream, and `references/cli.md` is
+written for this repo's readers - coding agents with `fp`. Every other file is
+byte-identical to upstream.
 
 Each one is a straight one-folder overwrite, published by a manual workflow in
 the upstream repo. **Two upstreams, not one** — the CLI and Python SDK moved to

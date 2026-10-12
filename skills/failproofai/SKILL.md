@@ -110,6 +110,9 @@ evaluation itself, so nothing here scaffolds an evaluator service any more.
 | Publish a Cloud policy version, deploy it to fleet machines, observe, enforce, or roll back | **`fp-cloud-cli`** |
 | Query FailproofAI Cloud — browse sessions, events, errors, evals; triage issues/alerts; manage keys, users, roles, settings | **`fp-cloud-cli`** (the cloud CLI skill) |
 | Decide what to score — which dimensions are worth tracking, grounded in real sessions | **`failproofai-eval-brainstorm`** |
+| Write or fix a hosted evaluation once you know what to measure — code vs jev vs judge, the Python, grounding its payload keys, repairing a dry-run error | **`failproofai-eval-author`** |
+| Write or tune a Cloud alert — trigger kind, a threshold from the org's own baseline, a 7/30-day replay, noisy vs silent | **`failproofai-alert-author`** |
+| Set up or tune a Cloud audit — scope, signals, cadence, cost, or whether an audit is the right tool | **`failproofai-audit-author`** |
 | Instrument an agent that is **not** one of the 12 supported CLIs — Python or TypeScript/JavaScript, on a framework (LangChain/LangGraph, CrewAI, LlamaIndex, Pydantic AI, Vercel AI SDK, Mastra) or hand-built | **`failproofai-sdk`** |
 | Run your own evaluator worker (the eval pod) — LLM judges or checks on your own infra, in Python or TypeScript | **`failproofai-sdk`** |
 | Every surface at once — product architecture, commands, terminology, setup, and skill selection | **stay here** |

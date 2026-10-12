@@ -727,7 +727,7 @@ hands failproofai no prompt (`semantic/intent.ts`, `PROMPT_CHANNELS.hermes` is a
 is true on every Hermes call and blocks the legitimate ones too. Judge what Jev can see: the
 command in `agent_request` and `facts`. Hermes tools no class knows (`execute_code`,
 `browser_*`, composio `OUTLOOK_*`, every MCP tool) are asked every check, one Jev request per
-call. Name the sender or script outright in the first probe ("`chetak-send.sh` sends a
+call. Name the sender or script outright in the first probe ("`wa-send.sh` sends a
 WhatsApp message"): Jev scored a bare mention 0.78, a warning instead of a deny, and 0.88
 once the probe said so.
 
@@ -930,7 +930,9 @@ at it. Project-scope discovery keys off that `cwd`, so the policy loads in isola
 `test-policy.mjs --policy` builds that directory for you, and is the form the guard allows.
 
 Test both directions: a payload that **should** be denied, and a near-miss that **should**
-be allowed. A policy that denies everything passes the first test.
+be allowed. A policy that denies everything passes the first test. Where the two lists come
+from, how to read a replay over real history, and how to repair a failing draft:
+`references/testing.md`.
 
 Two ways this test can lie to you:
 

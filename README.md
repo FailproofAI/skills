@@ -31,6 +31,9 @@ whole repository does.
 | [`fp-cloud-cli`](skills/fp-cloud-cli/) | Operate FailproofAI Cloud with `fp`: inspect telemetry, evals and usage; triage issues and audits; manage keys, users, orgs, and settings; publish Cloud policy versions; deploy them to fleet machines; observe enforcement; promote or roll back. Global options go **before** the command: `fp --json sessions`, not `fp sessions --json`. | Synced from `FailproofAI/failproofai` → `fp-cloud-cli/skill/`. Do **not** hand-edit here. |
 | [`failproofai-sdk`](skills/failproofai-sdk/) | Make an AI agent report what it did - plan which points in the agent loop to record, write the instrumentation with the Python (`failproofai_sdk`) or TypeScript/JavaScript (`@failproofai/sdk`) SDK - a framework adapter or a hand-built loop - thread session/agent identity through it, and verify the events actually land. Also runs your own evaluator worker (the eval pod) in either language. For an agent loop that is **not** one of the 12 supported CLIs. | Synced from `FailproofAI/failproofai` → `sdk/python/skill/`. Do **not** hand-edit here. |
 | [`failproofai-eval-brainstorm`](skills/failproofai-eval-brainstorm/) | Work out **what is worth measuring** about an agent's production runs, from the sessions it actually produced - scan the population, confirm the signal is really in the telemetry (a measurement over a payload key nobody emits does not fail, it scores every session identically and looks like it works), check it separates good runs from bad, and converge on two to four proposals. Each one ends in the plain-English prompt that authors it. It stops there: composing, backtesting and deploying the evaluation is the dashboard's eval authoring page. | Synced from `FailproofAI/agenteye` → `agent/skills/failproofai-eval-brainstorm/` (private). Do **not** hand-edit here. |
+| [`failproofai-eval-author`](skills/failproofai-eval-author/) | The step after brainstorming: **write** a hosted evaluation once you know what to measure. Pick the mechanism (Python `code`, a `jev` classifier, or an LLM `judge`) by a three-question dividing line, write the one-expression Python against the session surface, ground every payload key and compared value in the org's real event shapes (a guessed key scores every session the same and looks like it works), and repair a draft from a dry-run error or a backtest verdict. With `fp` it does the grounding by SQL; the dry run and deploy are the dashboard's eval authoring page. | Synced from `FailproofAI/agenteye` → `agent/skills/failproofai-eval-author/` (private). Do **not** hand-edit here. |
+| [`failproofai-alert-author`](skills/failproofai-alert-author/) | Write a FailproofAI Cloud alert that fires when it should and stays quiet otherwise: pick the trigger kind from what the intent must filter (error event, metric, score, saved query - metric rules cannot filter by agent), set the threshold from the org's own per-check baseline rather than a round number, replay the rule over 7 and 30 days, and repair it once if it is noisy or silent. | Synced from `FailproofAI/agenteye` → `agent/skills/failproofai-alert-author/` (private). Do **not** hand-edit here. |
+| [`failproofai-audit-author`](skills/failproofai-audit-author/) | Set up a FailproofAI Cloud audit - a scheduled sweep that files evidenced issues - at a sensible scope and cost: map the intent to the deterministic signals (secret, PII, injection and denial patterns; completion, loop, drift lenses), check the scope has traffic and how often each signal fires, choose cadence, window, sensitivity and failures per run, and say when a policy, an alert or an evaluation is the better tool. | Synced from `FailproofAI/agenteye` → `agent/skills/failproofai-audit-author/` (private). Do **not** hand-edit here. |
 
 ## Naming and compatibility
 
@@ -176,7 +179,7 @@ skills/                         ← this repo
     ├── failproofai-policy-author/
     │   ├── SKILL.md
     │   ├── references/          ← api · builtins · cloud · harnesses · patterns
-    │   │                           rules-files · traps
+    │   │                           rules-files · testing · traps
     │   ├── scripts/             ← runnable helpers (test a policy, sync a reference)
     │   └── agents/openai.yaml
     ├── failproofai-policy-publish/
@@ -191,9 +194,19 @@ skills/                         ← this repo
     │   ├── SKILL.md
     │   ├── references/          ← events · install · integration · frameworks · typescript · evaluator
     │   └── agents/openai.yaml
-    └── failproofai-eval-brainstorm/   ← mirror · what to measure, not how to score it
+    ├── failproofai-eval-brainstorm/   ← mirror · what to measure, not how to score it
+    │   ├── SKILL.md
+    │   └── references/          ← patterns · writing-the-prompt · cli
+    ├── failproofai-eval-author/       ← mirror · writing the evaluation itself
+    │   ├── SKILL.md
+    │   └── references/          ← choosing-the-mechanism · output-contract · python-surface
+    │                               grounding · writing-the-code · worked-examples · repair · cli
+    ├── failproofai-alert-author/      ← mirror · alerts from the org's own baseline
+    │   ├── SKILL.md
+    │   └── references/          ← triggers · noise · cli
+    └── failproofai-audit-author/      ← mirror · scheduled sweeps: scope, signals, cost
         ├── SKILL.md
-        └── references/          ← patterns · writing-the-prompt · cli
+        └── references/          ← signals · form · wrong-tool · cli
 ```
 
 Each skill folder is **self-contained**: its references/scripts/assets live inside
