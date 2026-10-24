@@ -245,10 +245,11 @@ most (`semantic/combine.ts`, grep `function clears`): a reviewable verdict is cl
    semantic check live. Jev also sees only `PreToolUse` and `PermissionRequest` calls the agent
    made — a reviewable `Stop` or `PostToolUse` policy is hard everywhere.
 2. **`semanticPolicies.add` outside a pack does nothing.** Only `failproofai publish` reads it.
-   In a `.failproofai/policies/` file or a cloud-managed policy it lands in a registry nothing
-   reads; only the hook log says so (`… never asked here`). Cloud-managed policies are also
-   always hard: their authority comes from the deployment, which does not set it yet; the
-   code's own fields are ignored.
+   In a `.failproofai/policies/` file or a cloud-managed policy's module it lands in a registry
+   nothing reads; only the hook log says so (`… never asked here`). A cloud-managed module's
+   own authority fields are ignored too: its authority comes from the deployment, which makes a
+   FailproofAI Cloud `both` policy reviewable by that policy's own Jev checks and leaves a
+   `regex` policy hard. Cloud Jev checks are declarations, not code (`cloud-jev.md`).
 3. **A check that is never asked makes the block permanent.** Its `appliesTo` must cover every
    tool the regex fires on and its precondition must hold for every shape. One misspelt or
    unknown name makes the whole declaration hard. The exception is a tool no class knows
@@ -256,7 +257,8 @@ most (`semantic/combine.ts`, grep `function clears`): a reviewable verdict is cl
    an MCP tool clears there unless its reviewer models the MCP call's shape (§10.4, not this
    one). Model it, or keep the floor off MCP tools.
 4. **A check asked that does not model the shapes switches the policy off.** Asked and not
-   firing answers "no concern", and no concern clears. `warn-git-clean` stays hard because
+   firing answers "no concern", and no concern clears. So does a probe saying the call
+   "executes": Jev sees it before it runs and reads that false. `warn-git-clean` stays hard because
    `destructive-deletion` cannot judge a `git clean` that names no path. Asked about
    `echo hi > app.py`, it answered `irreplaceable` 0.34 and a floor on unasked overwrites
    cleared with no warning: check each shape's harmful case against every probe.

@@ -441,8 +441,10 @@ Two judgment calls to make before writing, and to state back to the user at the 
   | **oversight** | `instruct()` | `warn-*` | risky but sometimes right — *"STOP: … Confirm with the user before executing."* |
   | sanitize | raw deny object (blocks output; `message` inert — references/traps.md §9) | `sanitize-*` | secrets in tool output |
 
-  Default to **oversight** when the action has any legitimate use. Blocking those just gets
-  the policy disabled. See `references/patterns.md` for the exact voice the builtins use — copy it.
+  The operator's verb decides first: "block / prevent / stop / deny" is a block, "warn /
+  remind / nudge" is oversight — never soften a request to block into a warning. Only when
+  they name neither, default to **oversight** for an action with any legitimate use; blocking
+  those just gets the policy disabled. See `references/patterns.md` for the exact voice the builtins use — copy it.
 
   Both flavors are harness-dependent. `deny()` only stops something on a **block** pair
   (*Pick an event the harness can actually enforce*), and `instruct()` is properly supported
@@ -551,8 +553,11 @@ Three outcomes when the lookup says your event does not block:
 | unverified (`?`) | Do not round it up to "works". Ship it, and say enforcement is unproven on that harness |
 
 `ctx.cli` (`policy-types.ts`, grep `interface PolicyContext`) carries the CLI id if a rule
-must genuinely differ per harness — use it to narrow a rule, never to rescue a discarded
-deny. No return value makes an `observe` row enforce.
+must genuinely differ per harness — an event or tool name only some harnesses have. Use it to
+narrow a rule to where it means something, never to rescue a discarded deny, and never to pick
+which agents a policy is for: in FailproofAI Cloud that is the deploy target, which can also
+name one exact profile (`references/cloud-jev.md` *What you can write and deploy*). No return
+value makes an `observe` row enforce.
 
 ### Write tool names in the canonical vocabulary
 
@@ -599,8 +604,15 @@ questions about the call in front of it. The regex always stays the floor.
 |---|---|
 | a string in the call — a flag, a path, a tool name | a normal policy. Stop here |
 | something a forged "the user asked for it" must never unlock — irreversible actions, privilege escalation, running code fetched from the internet, pushes to protected branches, credential access | a normal policy, **kept hard** even where a matching Jev check exists. failproofai keeps `block-sudo`, `block-curl-pipe-sh` and `block-push-master` hard for this reason |
-| a string, but the regex is noisy on legitimate shapes | the regex plus `authority: "reviewable"` and `reviewedBy`, so Jev can clear the harmless calls |
-| something no string decides — the target, the intent, whether the user asked | a **semantic check** (`semanticPolicies.add`) shipped in a **pack**, beside a regex floor wherever it must hold without Jev |
+| a string, but the regex is noisy on legitimate shapes | the regex plus `authority: "reviewable"` and `reviewedBy`, so Jev can clear the harmless calls — in FailproofAI Cloud, a **`both`** policy |
+| something no string decides — the target, the intent, whether the user asked | a **semantic check** (`semanticPolicies.add`) shipped in a **pack**, or a FailproofAI Cloud **`jev`** policy, beside a regex floor wherever it must hold without Jev |
+
+Authoring in FailproofAI Cloud? A Cloud policy has a kind — `regex`, `jev` or `both` — and its
+Jev checks are JSON declarations published beside the module, not JavaScript. Read
+`references/cloud-jev.md` for the declaration, the limits and how a `both` policy's checks review
+its module. Which machines and which agents run it (all, an integration, or one exact profile),
+and `enforce` or `observe` are chosen at deploy, never in the version —
+its *What you can write and deploy* has them, with examples.
 
 Jev reviews only `PreToolUse` and `PermissionRequest` calls the agent made, only where
 `~/.failproofai/jev.json` exists and is not `off`, and **only the checks an installed pack
@@ -655,7 +667,8 @@ by asking **"is there anything left that can deny?"**:
 
 Where `authority` and `reviewedBy` count: a local file honours them; in a pack entry
 `failproofai publish` validates them and copies them into the manifest, which is what machines
-read; a **cloud-managed policy is always hard** today.
+read. A **cloud-managed module ignores its own**: FailproofAI Cloud sets them for a `both`
+policy, from that policy's own Jev checks, and a `regex` policy is always hard.
 
 **Semantic — a question set, not code.** No `fn`, no `match`: Jev answers the probes, and
 the check fires only when every probe holds (its evidence is the lowest answer). A check that
@@ -663,7 +676,8 @@ does not fire answers "no concern", which clears any floor it reviews, so **ever
 true for the harmful call**, never for the harmless one. Put the "does it do X" probe first.
 
 Each probe's `instructions` **states the harmful claim**: a sentence true for the harmful call
-that says what `criteria.true` says. Never a question, never the harmless case. A push
+that says what `criteria.true` says. Never a question, never the harmless case. Jev sees the
+call before it runs, so say what it requests or would do — "executes" or "actual" reads false. A push
 guard's probe ending "Does the branch name appear verbatim anywhere in `user_said`?", under
 `criteria.true` "NOT present", scored 0.45–0.73 live, hovering on the 0.7 fire line. Stated
 as below, the same payloads scored 0.04 for the branch the user named and 0.93–0.98 for
@@ -739,8 +753,9 @@ asked for it" must not unlock, the way `credential-exfiltration` does. A suspect
 injection needs no setting: it already turns any check that fired into a deny.
 
 **`semanticPolicies.add` does something only inside a pack.** In `.failproofai/policies/` or
-a cloud policy it registers into a list nothing reads; the hook log says so once per file
-(`… never asked here`). **An installed pack's checks are the only questions Jev asks**: there
+a cloud policy's module it registers into a list nothing reads; the hook log says so once per
+file (`… never asked here`). FailproofAI Cloud carries Jev checks as declarations instead
+(`references/cloud-jev.md`). **An installed pack's checks are the only questions Jev asks**: there
 are no built-in ones to join. Several packs' checks are asked together, FailproofAI's first.
 So a `reviewedBy` is honoured only for a check some installed pack declares: from a local
 file it may name `FailproofAI/jev-policies`' 16 only where that pack is installed (otherwise
@@ -959,10 +974,13 @@ and only the replay says so.
 
 **There is no CLI surface.** `fp policies` has eight subcommands — `list show publish enable
 disable delete test compose` — and none of them backtests. Do not send the user looking for
-one. It lives in the dashboard, at `https://app.befailproof.ai/<org>/policy-editor` (the
-older `/<org>/policies` path redirects there, query preserved): paste or compose the `.mjs`
-under *publish a version*, pick an agent, a window (24h / 7d / 30d, default 30d) and a sample
-(default: everything in the window), then **run backtest**. It needs **`policies:write` and
+one. `compose` is the un-backtested draft path, and local `test` checks only the cases you
+supply. The backtest lives in the dashboard's new-policy flow,
+`https://app.befailproof.ai/<org>/policies/new` (*describe → review → test → turn on*; the
+older `/<org>/policy-editor` links still land on it): describe the rule, or **write it
+yourself** to paste the `.mjs`, then at **test** pick how far back (last 24 hours / 7 days /
+30 days, default 7 days) and whose calls (all agents, or one) and it replays them. A fleet
+replay needs **`policies:write` and
 `events:read` — both**. `policies:write` alone gets 403, because a replay runs caller-supplied
 code over stored payloads and hands back whatever the policy returned as its reason. Demo orgs
 are refused outright rather than shown a flattering number. `references/cloud.md` has the
@@ -1076,6 +1094,12 @@ looking for something that exists. Route GitHub pack publication to
 **`failproofai-policy-publish`** and Cloud deployment to **`fp-cloud-cli`** rather than
 improvising: `fp fleet deploy --add <policy>` with no `:effect` on the ref defaults to
 **enforce**, not observe, which is not a default to discover by experiment.
+
+One deploy choice does change how you author. Which agents run a FailproofAI Cloud policy is
+the assignment's target — all agents, an integration, or one exact profile — so a request like
+*"only in Codex"* or *"just my work Hermes profile"* is written for every agent, with no
+`ctx.cli` test, and the hand-off names the target to pick (`--target <policy>=codex`,
+`--target <policy>=hermes/agt_<id>`; `references/cloud-jev.md` *What you can write and deploy*).
 
 ## Enforcing a rules file (CLAUDE.md / AGENTS.md / system prompts)
 
@@ -1222,16 +1246,19 @@ real shape is `ctx.toolName === "execute_code"`, reading `ctx.toolInput.code` �
 string**, with the project key inside it — scoped by `ctx.cli === "hermes"`.
 `references/patterns.md` carries the finished policy.
 
-The dashboard will attempt those four lookups for you: open the issue's hand-off link,
-`https://app.befailproof.ai/<org>/policy-editor?from_issue=<issue-id>`, and it drafts a policy,
-replays it, and redrafts up to twice — about 20–30s, streamed phase by phase. Two things to
-know before you trust it. It **first asks whether a policy can address the finding at all**,
+The dashboard will attempt a first draft for you. The issue's page has **prevent this →**; it
+opens the hand-off link, `https://app.befailproof.ai/<org>/policies/new?from_issue=<issue-id>`
+(the older `/<org>/policy-editor?from_issue=` links still land there, query kept), which fills
+in the finding's words and drafts a policy for you to review and then test on past calls.
+Nothing is published from there. Two things to
+know before you trust it. The issue page **first asks whether a policy can address the finding at all**,
 and that check rejects a policy-shaped finding roughly half the time when the headline
 describes a **cross-call effect** ("retried 14 times", "burned the run budget") — even once
 where the finding itself named the `PreToolUse` remedy. That is a framing failure, not a
-verdict: restate the finding with the enforceable action in the title and it becomes eligible.
-And the redraft rounds do not widen coverage — shown what it missed, a draft gets *less*
-precise, not more. Read the verdict, keep the best round, and finish the work by hand.
+verdict: restate the finding with the enforceable action in the title and it becomes eligible
+(and *prevent this →* still opens the flow when the check says no). And redrafting does not
+widen coverage — shown what it missed, a draft gets *less* precise, not more. Read the test,
+keep the best draft, and finish the work by hand.
 
 Two things that bite while reading payloads:
 
@@ -1266,4 +1293,3 @@ Print the `issues comment-add` and `audits resolve` commands and let the user ru
 FailproofAI Cloud's confirms **auto-skip on a non-TTY, which is how you run it**, so a wrong id
 resolves someone else's finding on a shared board with no prompt — and triage needs
 `audits:write`, which a read-only account lacks. See `references/cloud.md`.
-
