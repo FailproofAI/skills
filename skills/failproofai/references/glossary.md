@@ -124,9 +124,9 @@ Six words that decide whether a policy is worth deploying. All of them come from
 **backtest**, and none of them is a promise about production.
 
 **Backtest** — replaying a candidate policy against stored fleet traffic to see what it would
-have said. Lives only in the dashboard, in the new-policy flow's **test** step at
-`/<org>/policies/new` (the old `/<org>/policy-editor` links redirect); there is no
-`fp policies backtest`. It measures **aim, not outcome**: the recorded agent cannot react, so a
+have said. `fp policies backtest <file|id>` from a terminal (session only), or the
+new-policy flow's **test** step at `/<org>/policies/new` in the dashboard (the old
+`/<org>/policy-editor` links redirect). It measures **aim, not outcome**: the recorded agent cannot react, so a
 deny did not stop the call, and everything after it in that session still happened.
 
 **Enforceable** — of the calls a draft fired on, how many landed on a `(harness, event)` pair

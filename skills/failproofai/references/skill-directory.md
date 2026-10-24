@@ -122,7 +122,7 @@ which is why "my events never appear" splits between this skill and `failproofai
 | | |
 |---|---|
 | **Owns** | working out WHAT to measure from the sessions an agent actually produced: scan the population, confirm the signal is really in the telemetry, check it separates good runs from bad, converge on two to four proposals, and write the prompt that authors each one |
-| **Refuses** | authoring or deploying the evaluation itself (the dashboard's eval authoring page composes, backtests and deploys it from that prompt), reading eval results that already exist or checking whether quality dropped (`fp evals`, via `fp-cloud-cli`), instrumenting an agent (`failproofai-sdk`), and alerting on scores |
+| **Refuses** | authoring or deploying the evaluation itself (`failproofai-eval-author`, or the dashboard's eval authoring page, from that prompt), reading eval results that already exist or checking whether quality dropped (`fp evals`, via `fp-cloud-cli`), instrumenting an agent (`failproofai-sdk`), and alerting on scores |
 | **Route to it when** | the user says "I want evals", "what should I be measuring?", or "how do I know if my agent is any good?" |
 | **Install** | `npx skills add FailproofAI/skills --skill failproofai-eval-brainstorm -a claude-code` |
 | **Maintained** | **mirror — do not hand-edit** |
@@ -145,8 +145,9 @@ and looks like it is working.
 | **Install** | `npx skills add FailproofAI/skills --skill failproofai-eval-author -a claude-code` |
 | **Maintained** | **mirror — do not hand-edit** |
 
-`fp` grounds it (keys and values by SQL); the dry run and deploy happen on the dashboard's
-eval authoring page.
+`fp` grounds it (`fp evaluators schema`, keys and values by SQL), dry-runs it
+(`fp evaluators dry-run`) and creates or deploys it (`fp evaluators create` / `deploy`,
+with `--backfill` for past sessions); the dashboard's eval authoring page does the same.
 
 ### `failproofai-alert-author` — an alert that fires when it should
 

@@ -176,7 +176,7 @@ command that ships.
 
 | Command | Subcommands | What it is |
 |---|---|---|
-| `policies` | `list show publish enable disable delete test compose` | the versioned source of a cloud-managed policy |
+| `policies` | `list show publish enable disable delete test compose author backtest candidacy` | the versioned source of a cloud-managed policy; `author`/`backtest`/`candidacy` draft and replay, never publish |
 | `fleet` | `list show deploy diff history rename rollback` | which version is running on which machine, and in which effect |
 | `guardrails` | `summary timeline` | what enforcement actually blocked, after the fact |
 

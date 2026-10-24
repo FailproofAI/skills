@@ -100,8 +100,14 @@ Read this before doing any work. Two of the specialists — `fp-cloud-cli` and `
 — are mirrors, synced from a private repo and marked do-not-hand-edit; duplicating or patching
 them here is a maintenance bug. `failproofai-eval-brainstorm` is a mirror too, and answers the
 question the retired `agenteye-evaluator` skill used to: **what is worth measuring**. It stops at
-the proposal — the dashboard's eval authoring page composes, backtests and deploys the
-evaluation itself, so nothing here scaffolds an evaluator service any more.
+the proposal; `failproofai-eval-author` writes, dry-runs and deploys the evaluation
+(`fp evaluators`, or the dashboard's eval authoring page), so nothing here scaffolds an
+evaluator service any more.
+
+The dashboard's assistant, the Slack agent and Cloud MCP can do the same Cloud work in
+conversation: author evaluations, alerts and audits, triage issues, and deploy or roll back
+policies. Every change waits for an **Approve** step in the chat or Slack thread; over MCP the
+client asks for confirmation.
 
 | The request is | Go to |
 |---|---|
