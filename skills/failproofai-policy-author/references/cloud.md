@@ -5,8 +5,8 @@ enforces inside the agent loop, FailproofAI Cloud records what happened across t
 local `failproofai audit` reads one machine's transcripts, FailproofAI Cloud holds every session from
 every agent in an org — so it sees things a local audit structurally cannot.
 
-The commands here were verified against a live FailproofAI Cloud deployment. Figures quoted below are
-illustrative of the shapes you will see, not from any particular org.
+Figures quoted below are illustrative of the shapes you will see, not from any
+particular org. AI authoring, backtest and candidacy commands need session login.
 
 ## Preflight
 
@@ -234,7 +234,24 @@ plus a pack switch, and that is the whole story for one machine. It is **not** t
 for a fleet: `fp policies publish`, `fp fleet deploy` and `fp guardrails` are shipped commands
 that carry the same rule to every machine and show it firing, and they need `policies:write`.
 That Cloud rollout path belongs to `fp-cloud-cli` — hand off rather than assuming the local
-edit is all there is. Then prove both local edits took effect, because neither is self-evident:
+edit is all there is. Its shape, so the hand-off names the right choices (all session-only:
+an API key exits 2 with "drop --api-key / FP_API_KEY and sign in with fp login"):
+
+```bash
+fp policies publish no-force-push ./rule.mjs                       # kind regex (the default)
+fp policies publish prod-db-intent --kind jev --semantic ./checks.json
+fp policies publish no-prod-db --kind both --source ./rule.mjs --semantic ./checks.json
+fp fleet deploy <machine> --add no-force-push:observe              # watch first; bare ref = enforce
+fp fleet deploy <machine> --target no-force-push=codex             # only Codex agents
+fp fleet deploy <machine> --target no-force-push=hermes/agt_<id>   # one exact profile
+fp fleet deploy <machine> --all-agents no-force-push               # back to every agent
+fp fleet history <machine>                                         # generations, newest first
+fp fleet rollback <machine> <deployment>                           # mints a new generation
+```
+
+Publishing deploys nothing. The kind is in the version; effect and target are per machine,
+per policy, at deploy (`cloud-jev.md` *What you can write and deploy*). Then prove both local
+edits took effect, because neither is self-evident:
 
 ```bash
 export SKILL_DIR=/path/to/skills/failproofai-policy-author   # this skill's own folder
@@ -275,14 +292,39 @@ of that lands on calls that actually failed. SKILL.md's *Backtest it against rea
 traffic* carries the decision rule — enforceability is judged before precision, and the verdict
 vocabulary. This is the operating procedure.
 
-**There is no CLI surface for it.** `fp policies` is `list show publish enable disable delete
-test compose` and nothing else; there is no `fp policies backtest` and no `fp policies author`.
-Say that plainly rather than implying a flag exists. Both live in the dashboard:
+Use the session-only `fp policies` authoring flow:
+
+```bash
+fp --json policies candidacy --issue <issue-id>
+fp --json policies author "Block the specific unsafe tool call observed in this issue."
+fp --json policies backtest ./rule.mjs --hours 168
+```
+
+Replace the issue id and intent with the grounded finding; inspect the authoring
+output and save the selected source as `rule.mjs` before the backtest. Candidacy
+asks whether a policy can address the issue; it is not deployment approval.
+`author` drafts and backtests (`--kind jev|both` asks for Jev checks), while
+`backtest <file|id>` replays a local file or an existing policy id (`--agent-id`,
+`--env`, `--hours` narrow it). Inspect the verdict, coverage and enforceability before
+publishing. Publishing a version still deploys nothing by itself.
+
+For Jev checks, `fp --json policies backtest --semantic checks.json` (alone: `jev`; with a
+source file: `both`), or a published `jev`/`both` id, returns a free **estimate** of how many
+stored calls match; `--run --sample N` (N ≤ 50, default window 168 hours) actually asks Jev
+and **spends the org's daily Jev allowance**, so get the user's OK first.
+
+All three commands support `--json` and need `fp login`. In API-key mode they
+exit 2 with "`fp <cmd>` needs a signed-in session: run `fp login`".
+A 404 on an older Cloud prints `not available on this FailproofAI Cloud yet`
+and exits 6; it is not a successful backtest with zero fires.
+The dashboard offers the same work when a person prefers the form (at **test**, pick how
+far back — last 24 hours, 7 days or 30 days, default 7 days — and whose calls):
 
 | Route | What it is |
 |---|---|
-| `https://app.befailproof.ai/<org>/policy-editor` | where both backtests run. `/<org>/policies` redirects here, query preserved |
-| `https://app.befailproof.ai/<org>/policy-editor?from_issue=<issue-id>` | the hand-off link: drafts, replays and redrafts a policy for that issue |
+| `https://app.befailproof.ai/<org>/policies/new` | where the backtest runs: *describe → review → test → turn on*. The older `/<org>/policy-editor` redirects to `/<org>/policies` (the list), or here when it carries `from_issue` |
+| `https://app.befailproof.ai/<org>/policies/new?from_issue=<issue-id>` | the hand-off link (the issue page's **prevent this →**): fills in the finding and drafts a policy to review and test |
+| `https://app.befailproof.ai/<org>/policies/<id>/new-version` | the same write-and-test form for the next version of an existing policy |
 | `https://app.befailproof.ai/<org>/policy` | what *deployed* policies did — block rate, per-policy table. `/<org>/guardrails` redirects here |
 
 Keep the `<org>` segment on every link you print. An org-less `/policy` falls through the

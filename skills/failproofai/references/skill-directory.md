@@ -1,6 +1,6 @@
 # The skill family and the docs behind it
 
-Six skills cover FailproofAI. They overlap deliberately at the edges and refuse each
+Nine skills cover FailproofAI. They overlap deliberately at the edges and refuse each
 other's work in the middle, so the routing sentence matters more than the description: pick
 on **what the user is trying to change**, not on which nouns they said.
 
@@ -9,7 +9,10 @@ on **what the user is trying to change**, not on which nouns they said.
          ├── failproofai-policy-publish ─► publish a GitHub pack others can install
          ├── fp-cloud-cli ───────────────► query and administer FailproofAI Cloud
          ├── failproofai-sdk ────────────► instrument an agent that is not one of the 12 CLIs
-         └── failproofai-eval-brainstorm ► decide what is worth scoring, grounded in real sessions
+         ├── failproofai-eval-brainstorm ► decide what is worth scoring, grounded in real sessions
+         ├── failproofai-eval-author ────► write the evaluation, grounded and dry-run
+         ├── failproofai-alert-author ───► write an alert from the org's own baseline
+         └── failproofai-audit-author ───► set up a scheduled sweep: scope, signals, cost
 
 ## Install any of them
 
@@ -22,18 +25,20 @@ is not installed, do the job in whichever skill you are in — each carries a co
 of the others in `references/` — and tell the user which skill would have done it better,
 with that command.
 
-## Three of these are mirrors
+## Six of these are mirrors
 
-`fp-cloud-cli` and `failproofai-sdk` are synced from `FailproofAI/failproofai`;
-`failproofai-eval-brainstorm` is synced from the private `FailproofAI/agenteye` repository. All three
-are marked **do-not-hand-edit.** Patching them here is a
-maintenance bug: the next sync silently reverts your change, and in the meantime two copies
-of the same claim disagree. Fix upstream, or carry the correction in a skill that is
-maintained here — `failproofai`, `failproofai-policy-author`, and
+`fp-cloud-cli` and `failproofai-sdk` are synced from `FailproofAI/failproofai` by a workflow;
+`failproofai-eval-brainstorm`, `failproofai-eval-author`, `failproofai-alert-author` and
+`failproofai-audit-author` are copies of the skills FailproofAI Cloud's own dashboard
+assistant runs on. All six are **do-not-hand-edit.** Patching them here is a
+maintenance bug: the next sync or copy silently reverts your change, and in the meantime two
+copies of the same claim disagree. Fix them at their source, or carry the correction in a
+skill that is maintained here — `failproofai`, `failproofai-policy-author`, and
 `failproofai-policy-publish`.
 
 The mirror folders match their shipped skill names: `skills/fp-cloud-cli/`,
-`skills/failproofai-sdk/` and `skills/failproofai-eval-brainstorm/`.
+`skills/failproofai-sdk/`, `skills/failproofai-eval-brainstorm/`, `skills/failproofai-eval-author/`,
+`skills/failproofai-alert-author/` and `skills/failproofai-audit-author/`.
 
 `agenteye-evaluator` was **retired, not renamed.** It taught you to build a v1 "server-push"
 evaluator service, and that service no longer exists — scoring is Evaluator v2, either a
@@ -41,7 +46,7 @@ hosted evaluation authored in the dashboard or a worker built on `failproofai-sd
 of it worth keeping was never the code: it was deciding what to measure, which is now
 `failproofai-eval-brainstorm`.
 
-## The six
+## The nine
 
 ### `failproofai` — the complete umbrella
 
@@ -117,7 +122,7 @@ which is why "my events never appear" splits between this skill and `failproofai
 | | |
 |---|---|
 | **Owns** | working out WHAT to measure from the sessions an agent actually produced: scan the population, confirm the signal is really in the telemetry, check it separates good runs from bad, converge on two to four proposals, and write the prompt that authors each one |
-| **Refuses** | authoring or deploying the evaluation itself (the dashboard's eval authoring page composes, backtests and deploys it from that prompt), reading eval results that already exist or checking whether quality dropped (`fp evals`, via `fp-cloud-cli`), instrumenting an agent (`failproofai-sdk`), and alerting on scores |
+| **Refuses** | authoring or deploying the evaluation itself (`failproofai-eval-author`, or the dashboard's eval authoring page, from that prompt), reading eval results that already exist or checking whether quality dropped (`fp evals`, via `fp-cloud-cli`), instrumenting an agent (`failproofai-sdk`), and alerting on scores |
 | **Route to it when** | the user says "I want evals", "what should I be measuring?", or "how do I know if my agent is any good?" |
 | **Install** | `npx skills add FailproofAI/skills --skill failproofai-eval-brainstorm -a claude-code` |
 | **Maintained** | **mirror — do not hand-edit** |
@@ -129,6 +134,40 @@ half only someone looking at real sessions can do.
 The trap it exists to prevent: `event.payload` is free-form, so an evaluation reading a key
 nobody emits **does not fail**. It reads nothing on every session, scores them identically,
 and looks like it is working.
+
+### `failproofai-eval-author` — write the evaluation
+
+| | |
+|---|---|
+| **Owns** | the step after the proposal: choosing code vs jev vs judge, the one-expression Python against the session surface, grounding every payload key and compared value in the org's real event shapes, and repairing a draft from a dry-run error or a backtest verdict |
+| **Refuses** | deciding what to measure (`failproofai-eval-brainstorm`) and blocking tool calls (`failproofai-policy-author`) |
+| **Route to it when** | "write an eval that scores X", "this eval scores every session the same", "should this be a judge?" |
+| **Install** | `npx skills add FailproofAI/skills --skill failproofai-eval-author -a claude-code` |
+| **Maintained** | **mirror — do not hand-edit** |
+
+`fp` grounds it (`fp evaluators schema`, keys and values by SQL), dry-runs it
+(`fp evaluators dry-run`) and creates or deploys it (`fp evaluators create` / `deploy`,
+with `--backfill` for past sessions); the dashboard's eval authoring page does the same.
+
+### `failproofai-alert-author` — an alert that fires when it should
+
+| | |
+|---|---|
+| **Owns** | picking the trigger kind from what the intent must filter, setting the threshold from the org's per-check baseline, replaying the rule over 7 and 30 days, and the one repair when it is noisy or silent |
+| **Refuses** | what to evaluate (`failproofai-eval-brainstorm`), blocking tool calls (`failproofai-policy-author`), and periodic reviews of many sessions (`failproofai-audit-author`) |
+| **Route to it when** | "tell me when X spikes", "this alert fires all the time", "it never fired" |
+| **Install** | `npx skills add FailproofAI/skills --skill failproofai-alert-author -a claude-code` |
+| **Maintained** | **mirror — do not hand-edit** |
+
+### `failproofai-audit-author` — a sweep at a sensible scope and cost
+
+| | |
+|---|---|
+| **Owns** | turning an intent into the audit form: scope with real traffic, the deterministic signals it relies on and how often they fire, cadence, window, sensitivity, failures per run, notes — and saying when a policy, alert or evaluation fits better |
+| **Refuses** | writing the alert, evaluation or policy itself (their own skills), and triaging findings that already exist (`fp-cloud-cli`) |
+| **Route to it when** | "sweep the support bots weekly for leaked keys", "this audit finds nothing / costs too much" |
+| **Install** | `npx skills add FailproofAI/skills --skill failproofai-audit-author -a claude-code` |
+| **Maintained** | **mirror — do not hand-edit** |
 
 ## Naming, so cross-references resolve
 

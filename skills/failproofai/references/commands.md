@@ -82,6 +82,7 @@ an unsupported command never half-runs. Refused outright:
 | **every `fleet` subcommand** | same — the fleet is an operator surface |
 | **every `guardrails` subcommand** | same — guardrails reads that operator surface |
 | every `agent` subcommand | the assistant's chats belong to a person; there is no API route behind it |
+| `evaluators draft`, `query compose` (and `policies author/backtest/candidacy`) | AI drafting runs as a person: "needs a signed-in session: run `fp login`". The rest of `evaluators` works with a key holding `evaluations:trigger` |
 | every `orgs` subcommand | org membership belongs to a signed-in user; a key already acts for one org |
 | `login`, `logout` | there is no session to establish or clear |
 | `keys update` | it needs `keys:update`, which cannot be granted to **any** key — unreachable by construction, not merely unlikely |
@@ -266,6 +267,31 @@ status_counts, score_stats[], timeline}`.
 fp --json evals --aggregate --agent-id <agent> | jq '.score_stats'
 ```
 
+## `evaluators`
+
+`evals` reads results; `evaluators` authors the definitions (code, LLM judge, Jev).
+Writes need `evaluations:trigger`; `schema` and session dry runs also need `events:read`.
+
+| Subcommand | Flags / notes |
+|---|---|
+| `list` | `--key K`, `--all` (include disabled versions) |
+| `show K[@V]` | full source |
+| `schema` | the org's sampled event and payload-key profile |
+| `draft "<intent>"` | **session only**; `--kind code\|judge\|jev`, `--out spec.json` (refuses to overwrite) |
+| `dry-run` | a source (below) or `--file`; repeated `--session` (max 10), none = compile only. A judge cannot be dry-run; a Jev run spends model budget |
+| `create` | `--key --name`, `--version` (default 1), repeated `--label`, `--condition EXPR\|@file`, one source, repeated `--dry-run-on SESSION`, `--disabled`, `--force` |
+| `deploy K` | a NEW version (numeric versions auto-increment), then disables the older enabled ones; `--backfill 7d` (1–90d) scores stored sessions too |
+| `backfill` | `--from T --to T` (≤ 90 days), `--key K`, `--dry-run` (free count of missing pairs) |
+| `enable` / `disable K[@V]`, `label K[@V] --add/--remove` | toggles and labels |
+| `instances`, `jobs` | managed evaluator instances, queued evaluation jobs |
+
+Sources: `--code file.py --result-kind score|metric|assertion [--timeout S]`;
+`--judge --criteria TEXT [--step TEXT]… [--threshold X]`;
+`--jev noul --instructions T --true T --false T` or `--jev score --instructions T --level …`
+(3–5 levels, worst first); or `--file spec.json` (the API body). **Judge and Jev dry runs,
+backfills and `sessions re-evaluate` spend the org's model budget** — ask first. Depth is in
+`failproofai-eval-author`.
+
 ## `errors`
 
 Errored events, newest first — or `--aggregate` for a count plus its blast radius. Needs
@@ -323,8 +349,8 @@ Cloud rollout belongs to `fp-cloud-cli`; GitHub pack publishing belongs to
 
 ## `policies`
 
-`list show publish enable disable delete test compose`. Bare `fp policies` prints help and
-exits 2.
+`list show publish enable disable delete test compose author backtest candidacy`. Bare
+`fp policies` prints help and exits 2.
 
 ### `policies list`
 
@@ -456,6 +482,16 @@ checked here. So a role holding only `agent:use` is **refused**, and one holding
 check the grant, not the intuition.
 
 `--json`: `{prompt, source, syntax, published}`.
+
+### `policies author` / `backtest` / `candidacy`
+
+Session-only, and none of them publishes.
+
+| Command | Flags / notes |
+|---|---|
+| `author "<intent>"` | `--kind regex\|jev\|both` (default regex). Drafts a policy grounded on the org's events and backtests it |
+| `backtest [FILE_OR_ID]` | a local `.mjs` (`@path`, `-`) or a published id; `--hours N`, `--agent-id`, `--env`. For Jev: `--kind`, `--semantic checks.json`; a free estimate by default, `--run [--sample N≤50]` asks Jev and **spends the org's Jev allowance**. Needs `policies:write` **and** `events:read` |
+| `candidacy --issue <id>` | could a policy prevent this issue? Read-only verdict with a suggested intent |
 
 ## `fleet`
 
@@ -672,8 +708,10 @@ ones with `--add`/`--remove` in the same call.
 
 ## `query`
 
-`list show create update delete run schema`. Saved SQL against the read-only analytics pool.
-Referenced by name (a UUID-shaped id also works).
+`list show create update delete run schema compose export`. Saved SQL against the
+read-only analytics pool. Referenced by name (a UUID-shaped id also works).
+`compose "<question>"` (session only) drafts SQL and prints it; `--run` also executes it.
+`export [name] | --sql …` writes `--format csv|json` to `--out` or stdout.
 
 | Subcommand | Flags | Needs |
 |---|---|---|
@@ -699,7 +737,10 @@ fp --json query run --sql "select count(*) from analytics.events"
 
 ## `alerts`
 
-`list show create update delete test`. Referenced by name, unique per org. An alert is a
+`list show create update delete test recipients issues`. Referenced by name, unique per org.
+`recipients` lists who alerts can route to; `issues <alert-id>` lists the issues one alert
+raised, or `--create --title T [--summary S]` / `--create --file body.json` raises one
+(needs `issues:create`). An alert is a
 trigger (shaped per `--trigger-kind`) + an evaluation cadence + channels (email / Slack /
 webhook).
 
@@ -736,8 +777,11 @@ fp alerts create high-errors --trigger-kind metric_threshold --severity warning 
 ## `audits`
 
 Eighteen subcommands: `list show create edit delete run runs context-show context-set
-context-refresh findings finding ack mute dismiss resolve reopen assign`. Audits are
-referenced by **name**, findings by **id**.
+context-refresh findings finding ack mute dismiss resolve reopen assign`, plus the
+`contracts` group. Audits are referenced by **name**, findings by **id**.
+`audits contracts list | show <id> | create --agent-id A --body TEXT|@file | update <id>
+[--enabled|--disabled]` manages agent contracts (what each agent is supposed to do; every
+audit reads them; body ≤ 5000 chars, no delete).
 
 An audit runs on a schedule and sweeps a window of activity. What it produces are
 **findings** — recurring patterns carried across runs.
@@ -984,7 +1028,7 @@ is the map; `skills/failproofai/references/cli.md` is the authority on every edg
 
 | Command | Flags |
 |---|---|
-| `config` (aliases `configure`, `setup`) | `--connect <url> --token <key>`, `--machine-id`, `--machine-label`, `--no-transcripts`, `--disconnect`, `--status`, `--pause [<dur>] [--session <id>]`, `--resume [--all] [--session <id>]` |
+| `config` (aliases `configure`, `setup`) | bare: the wizard, whose cloud step offers **Log in to FailproofAI Cloud** in a browser. `--token <key>` (prefer `FAILPROOFAI_CLOUD_TOKEN`), `--oss`, `--agents <a,b\|all>`, `--url <url>`, `--connect <url>`, `--machine-id`, `--machine-label`, `--no-transcripts`, `--disconnect`, `--status`, `--pause [<dur>] [--session <id>]`, `--resume [--all] [--session <id>]`. Anything else is rejected |
 | `policies` (aliases `policy`, `pack`, `p`) | `--install`/`-i`, `--uninstall`/`-u`, `--scope user\|project\|local[\|all]`, `--cli`, `--beta`, `--custom`/`-c` |
 | `policies add\|remove <name>` | `--scope`, `--cli`, `--beta` **only** — `--custom` is a hard error here |
 | `policies add\|remove <owner>/<repo>` | The **pack** lane, chosen by the slash: `[--policy a,b\|--only a,b] [--category x,y] [--all] [--cli <agent>…]`. `--scope` is ignored — a pack install is machine-level |
@@ -1002,9 +1046,12 @@ is the map; `skills/failproofai/references/cli.md` is the authority on every edg
 
 Traps that decide whether a command did what you think:
 
-- **`config` validates no flags at all.** `failproofai config --statuss` does not error — it
-  falls through every check and launches the interactive wizard. Same for `--disconect` or any
-  typo.
+- **`config` rejects any flag it does not take.** `failproofai config --statuss` exits 1 with
+  "Unexpected argument: --statuss" and a pointer to `failproofai config --help`; a flag with
+  the wrong dash count (`-status`) gets "Did you mean `failproofai config --status`?". Older
+  builds silently launched the wizard on a typo, so on one of those check the version first.
+  `--send-transcripts` is retired but still accepted (it does nothing; transcripts are on by
+  default, and it cannot be combined with `--no-transcripts`).
 - **`--cli` is greedy** and stops at the first token that is not a known CLI name, so a typo'd
   CLI name is silently reinterpreted as a policy name. Twelve names, everywhere the same set:
   `claude codex copilot cursor opencode pi hermes openclaw factory devin antigravity goose`.

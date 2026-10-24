@@ -101,7 +101,7 @@ customPolicies.add({
   description: "Hermes browser_open is unmapped, so no builtin covers it",
   match: { events: ["PreToolUse"] },
   fn: async (ctx) => {
-    // Scope by harness: `browser_open` means nothing on the other eleven, and a
+    // Harness mechanics: `browser_open` means nothing on the other eleven, and a
     // future CLI could ship the same name with different arguments.
     if (ctx.cli !== "hermes") return allow();
     if (ctx.toolName !== "browser_open") return allow();
@@ -118,8 +118,9 @@ Points that matter:
 - **`toolInput` keys are raw too.** Canonicalization of input keys is also per-tool and
   per-harness (`*_TOOL_INPUT_MAP`), so an unmapped tool's arguments arrive exactly as the
   harness sent them. Read the payload before assuming a key name.
-- **Gate on `ctx.cli`** unless the name is genuinely universal. `references/harnesses.md`
-  lists what each harness canonicalizes; anything absent is raw.
+- **Gate on `ctx.cli`** unless the name is universal. `references/harnesses.md` lists what
+  each harness canonicalizes; anything absent is raw. Never gate on it to run a policy only
+  on Hermes or one profile: that is a deploy target.
 
 ## From a cloud issue to a policy that actually fires
 
@@ -211,8 +212,7 @@ signals which:
 
 Name your policy with the matching prefix. A reader should know the mode from the name.
 
-Most requests that sound like "block X" are really `warn-*`. Blocking something with a
-legitimate use just teaches people to disable the policy.
+Never soften a request to block into `warn-*`.
 
 ## Oversight — stop and confirm with the human
 

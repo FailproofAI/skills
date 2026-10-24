@@ -11,6 +11,7 @@ organisation. Needs `events:read`; the `evals` command also needs `evaluations:r
 | where it hurts | `fp --json errors --aggregate --since 7d` |
 | which runs failed | `fp --json sessions --status error,timeout --since 7d --all --limit 1000` |
 | what is already scored | `fp --json evals --aggregate --since 7d` → `score_stats` |
+| what is already defined, even without results | `fp --json evaluators list --all` · `fp --json evaluators show <key>@<version>` |
 | which scores are low | `fp --json evals --score <key>:..0.5 --since 7d --all --limit 200` |
 | a session's shape | `fp --json events --session-id <id> --order asc --all --limit 1000` |
 | a session's content | the same, plus `--full` |
@@ -48,11 +49,12 @@ fp --json query run --sql \
 column is the useful trick: it answers Gate A and Gate B in one query, putting the rate a
 key is present at next to the number it produces.
 
-## Gate A without a payload profile
+## Gate A — schema profile and payload checks
 
-The dashboard assistant has a profile of the organisation's payload keys. **The CLI has
-no equivalent command**, so confirming a field exists is on you — and skipping it is how
-you propose a measurement over a key nobody emits.
+Read `fp --json evaluators schema` for the organisation's sampled event and payload
+profile. It needs `evaluations:trigger` and `events:read`. A sampled profile is not
+proof of universal presence, so confirm the candidate fields on real sessions;
+skipping this is how you propose a measurement over a key nobody emits.
 
 Derive it from the data instead. Over one session:
 
@@ -74,33 +76,57 @@ claim, "present" is not.
   rows and looks complete. Always `--all --limit 1000`; past that, page with `--cursor`.
 - **`--since` is a closed set** — `all`, `15m`, `1h`, `6h`, `24h`, `7d`. Anything else is
   a usage error; use `--from` / `--to` with RFC3339 for a custom range.
-- **`evals` and `errors` filters are single-valued** — a repeated flag means last-wins.
+- **`evals --score` is repeatable and AND-combined.** Each range is
+  `KEY:MIN..MAX`, with either bound optional. `errors` filters are single-valued;
   `sessions` and `events` take CSV and repeats.
 - **Keep `--full` bound to one `--session-id`.** It is slow at scale, and you do not need
   payloads to read a session's shape.
 
-## Building the authoring link
+## From a proposal to a deployed evaluator
 
-There is no `build_eval_authoring_link` here — that tool belongs to the dashboard
-assistant. Build the link yourself; it is three pieces, and `fp` has two of them:
+Each proposal carries its intent plus an exact terminal authoring action, not just
+a prompt to paste. This skill still stops at proposals: perform drafting and
+deployment only when the user asks to proceed, following `failproofai-eval-author`
+and its `references/cli.md`.
 
 ```bash
-ORG=$(fp --json whoami | jq -r '.active_org // empty')
-BASE=${FP_DASHBOARD_URL:-https://app.befailproof.ai}
-PROMPT='Fraction of tool calls … Use the evaluation key `tool_retry_rate`.'
-
-[ -n "$ORG" ] && echo "$BASE/$ORG/eval-authoring/new?intent=$(jq -rn --arg p "$PROMPT" '$p|@uri')"
+fp evaluators draft "Fraction of recorded events without an error. Use key error_free_events, result kind score and label reliability." \
+  --kind code --out error_free_events.json
+fp evaluators dry-run --file error_free_events.json
+# After inspecting the spec, test both independently selected cohorts (up to 10 sessions).
+fp evaluators dry-run --file error_free_events.json --session <bad-session> --session <good-session>
+# Get approval of the exact definition before enabling it.
+fp evaluators create --file error_free_events.json
+fp --json evals --score error_free_events:..0.5 --since 24h
 ```
 
-**If `active_org` comes back empty, do not build the link.** Under an API key with no
-`--org`, `whoami` reports `null` — and an instance-scoped key then resolves server-side
-to the *default* org, so a link built from a guess would open authoring against the wrong
-tenant. Hand over the prompt instead and say why: *"pass `--org <slug>` and I will build
-the link."*
+Replace the session placeholders with real finished session ids. For a judge,
+skip both dry-run commands: judges cannot be dry-run. Inspect its condition and
+steps, create with approval, and read the first results. Jev dry runs spend model
+budget; obtain consent. Judge/Jev always produce scores, thresholds are 0–1, and
+Jev score rubrics have 3–5 distinct levels ordered worst to best.
+Use `fp evaluators deploy <key> --file spec.json` with a new version for a
+replacement; it disables older enabled versions. Code, Jev and judges can score
+historical sessions (up to 90 days): `fp evaluators backfill --from T --to T --key <key>
+--dry-run` counts the missing pairs for free, the same command without `--dry-run`
+queues them (or `deploy … --backfill 7d`, or **score past sessions** in the dashboard).
+Jev/judge scoring spends the org's model budget, so get a separate OK first. Backfill preserves results and terminal assignments
+for each session/key, so publishing a new version does not re-grade old pairs.
 
-`@uri` matters: the prompt carries backticks, quotes and dashes, and the page decodes
-exactly what you encode. One link per proposal, same rules as the method — build it, do
-not offer to.
+AI drafting needs a **signed-in session**. In key mode, `fp evaluators draft`
+exits 2 with "`fp evaluators draft` needs a signed-in session: run `fp login`".
+Either log in, or author the code/envelope spec by hand with
+`failproofai-eval-author` and use `create --file` with the key. The **standard**
+key preset includes `evaluations:trigger`, needed for authoring.
+Only if authentication is unavailable or that permission is missing, offer the
+dashboard form as a paste fallback and explain `fp login` or the permission fix.
+Never guess an org slug for a fallback link; check the selected organisation first.
+
+`fp query compose "<question>"` drafts SQL for investigating a candidate; add
+`--run` only when you intend to execute it. It too needs session login. With a key,
+keep using `fp query run --sql`. New commands on an older Cloud may exit 6 with
+`not available on this FailproofAI Cloud yet`; report this rather than claiming
+that authoring or querying succeeded.
 
 ## The local deliverable
 
@@ -109,7 +135,8 @@ where**: the file can carry paraphrased customer data, and this may be running b
 repo for it exists. Cite session ids and paraphrase what you saw; never paste raw
 transcript into a file.
 
-Each proposal still ends in the prompt and the link built above, which opens the
-dashboard's eval authoring page to compose, backtest and deploy. The link is the handoff;
-the prompt beside it is what the user can read before they click, and what they paste
-if the link could not be built.
+Each proposal ends in the intent and its `fp evaluators draft` command with a
+distinct output filename. Once the user chooses to proceed, the authoring skill
+turns that draft into a tested, deployed definition with `create` or `deploy`.
+Report the created key/version and evidence from results, not just the existence
+of a local spec file.

@@ -59,37 +59,65 @@ metadata:
 ---
 ```
 
-## Synced skills (don't hand-edit these)
+## `main` is live
 
-Three skills are **mirrored from another repo** and must not be edited here —
-edits would be overwritten on the next sync. Their source of truth is listed in
-the README "Skills" table.
+`failproofai config` writes a small `failproofai` pointer skill into every agent on every
+machine that runs setup. It holds no instructions; it tells the agent to fetch
+`skills/failproofai/SKILL.md` (and the sibling skills it names) from this repository's
+**`main`** branch at the moment it needs them. So a merge to `main` changes what every
+enrolled agent reads next, with no release in between. Review a PR here as you would a
+release, and never merge text that teaches a command or flag the released CLIs do not have.
 
-Each one is a straight one-folder overwrite, published by a manual workflow in
-the upstream repo. **Two upstreams, not one** — the CLI and Python SDK moved to
-`FailproofAI/failproofai` with the product rename; the evaluator did not:
+## Where each skill comes from
 
-```
-failproofai:fp-cloud-cli/skill/  ──▶  skills/fp-cloud-cli/        (workflow: Sync fp-cloud-cli skill)
-failproofai:sdk/python/skill/    ──▶  skills/failproofai-sdk/     (workflow: Sync failproofai-sdk skill)
-agenteye:evaluator-sdk/skill/    ──▶  skills/agenteye-evaluator/  (workflow: Sync agenteye-evaluator skill)
-```
+| Skill | Source of truth | How it gets here |
+|---|---|---|
+| `failproofai`, `failproofai-policy-publish` | this repo | edited here, normal PR |
+| `failproofai-policy-author` | this repo | edited here, normal PR. FailproofAI Cloud's dashboard assistant (a private repository) runs on a copy of it; a change made on either side is copied by hand to the other, so the two stay identical |
+| `fp-cloud-cli` | `FailproofAI/failproofai` → `fp-cloud-cli/skill/` | **workflow**, never by hand |
+| `failproofai-sdk` | `FailproofAI/failproofai` → `sdk/python/skill/` | **workflow**, never by hand |
+| `failproofai-eval-brainstorm`, `failproofai-eval-author`, `failproofai-alert-author`, `failproofai-audit-author` | FailproofAI Cloud's dashboard assistant (private repository) | **copied by hand**, as a subset (below) |
 
-`FailproofAI/agenteye` is private; you need push access to the upstream repo to
-re-run any of these workflows.
+### The two workflow-synced skills: never edit them here
 
-`agenteye-evaluator` is **not** a stale name. It is what the skill, the
-distribution (`agenteye-evaluator`) and the module (`agenteye_evaluator`) are
-still called upstream — renaming it here breaks the sync.
+`fp-cloud-cli` and `failproofai-sdk` are overwritten by workflows in `FailproofAI/failproofai`
+(`sync-fp-cloud-cli-skill.yml`, `sync-failproofai-sdk-skill.yml`). Each runs on a push to that
+repo's `main` that touches the source folder (or by manual dispatch there), replaces the whole
+folder here on a `sync/<skill>` branch, **force-pushes** that branch, and opens or refreshes
+one PR. Consequences:
 
-To change one, edit the source folder upstream and re-run its workflow from that
-repo's `main`. Each workflow rebuilds its own `sync/<skill>` branch off the
-latest `main` here and **force-pushes** it, refreshing one long-lived PR. So on
-top of not hand-editing the mirrored folder: don't add your own commits to a
-`sync/*` branch either — the next run discards them without warning. Changes
-outside the mirrored folder (a README row, this file) go in a normal PR.
+- An edit made directly to `skills/fp-cloud-cli/` or `skills/failproofai-sdk/` is reverted by
+  the next run. Fix the source in `FailproofAI/failproofai` instead, and let the workflow
+  carry it.
+- Don't add commits to a `sync/*` branch; the next run discards them without warning.
+- Changes outside the synced folder (a README row, this file) go in a normal PR.
 
-Everything else under `skills/` — `failproofai`, `failproofai-policy-author`,
-`failproofai-policy-publish` — is maintained here and
-edited normally. If a mirror is wrong, fix it upstream or carry the correction in
-one of those three; never patch the mirror in place.
+### The four hand-copied skills
+
+The dashboard assistant's skills live in a private repository; nothing syncs them
+automatically. A maintainer with access copies the folders over by hand. The copy is a
+**subset**, and the differences are deliberate:
+
+- **Upstream only, never copied:** `references/dashboard.md` (the dashboard assistant's tool
+  map) and `references/compose.md` (the drafters' prompt contracts). They only make sense
+  inside the dashboard.
+- **Public only, kept here:** `agents/openai.yaml` in each of the four (Codex settings, as every
+  other skill here has).
+- **May lag upstream on purpose:** a file whose upstream version teaches `fp` commands or flags
+  the released `fp` does not have yet (mostly `references/cli.md`, and the lines in
+  `SKILL.md` / `choosing-the-mechanism.md` that point at them) keeps its released-CLI text here
+  until that CLI ships. Copy the rest of the change.
+- **Customer-facing names:** this repo says "FailproofAI Cloud" and "the failproof evaluator";
+  never the internal codename, and never a customer's name or their agents, scripts or
+  policies, even as an example.
+
+Everything else in those four folders matches upstream. When you re-copy:
+
+1. Diff upstream against this repo, folder by folder.
+2. Take every change except the upstream-only files and released-CLI holds above.
+3. Grep the result for the internal codename, private repository names, client names and
+   key-shaped strings before opening the PR.
+4. `python3 scripts/validate-skills.py`.
+
+If one of the four is wrong here, fix it upstream and re-copy it, or carry the correction in
+`failproofai` or `failproofai-policy-author`; never patch only the copy.

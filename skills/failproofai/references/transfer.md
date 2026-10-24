@@ -181,7 +181,7 @@ and the collector will not re-read a file it holds a cursor for.
 ### Rename without reconnecting
 
 ```bash
-failproofai config --machine-label "Nikita's Mac"
+failproofai config --machine-label "Alex's Mac"
 ```
 
 `--machine-label` **alone** is a rename (`wantsRename` — set only when neither `--connect` nor

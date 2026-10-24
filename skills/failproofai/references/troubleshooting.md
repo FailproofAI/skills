@@ -421,7 +421,7 @@ fp --json fleet list                                # which machine, on which ve
 fp fleet deploy <machine-id> --add <policy-id>@<version>:observe
 ```
 
-`policies publish --json` answers the question itself: alongside the created version it
+`fp --json policies publish` answers the question itself: alongside the created version it
 returns `carriers`, a machine id → currently-running version map. If the version you just
 minted appears against no carrier, nothing is enforcing it. The lifecycle is compose → test
 → publish → **fleet deploy** → guardrails, and only the last two change what a machine does.
@@ -453,6 +453,25 @@ One more permission trap at the other end of that lifecycle: `fp policies compos
 not `agent:use`** — the route is wrapped in the policies permission despite the name. A role
 holding only `agent:use` is refused; one holding `policies:write` and no `agent:use` works.
 It is session-only like the rest of the family.
+
+## A Cloud `jev` or `both` policy is deployed and never asks
+
+Jev checks run on FailproofAI Cloud, so nothing about them is installed on the machine; the
+machine sends each checked tool call there. `fp fleet show <machine-id>` lists the policy
+errors the machine last reported, and anything listed there is not enforcing:
+
+| Reported | Meaning | Fix |
+|---|---|---|
+| `jev_unconfigured` | Jev is on for the machine, and its key does not carry Jev | reconnect the machine with a key that does (`failproofai config`) |
+| `transcripts_disabled` | the machine was connected with `--no-transcripts`, so it never asks | reconnect without `--no-transcripts`, or deploy a `regex` policy instead |
+| `jev_budget: dropped <name>` | an installed pack's check was left out of a request: the call's checks were over the question budget | fewer or shorter checks (`failproofai-policy-author`, `references/cloud-jev.md`) |
+| `agent_scope_unresolved` | a targeted assignment could not tell which agent profile made the call, so it did not match (untargeted ones still apply) | re-run `failproofai config` so older hooks carry their scope; or target the integration, or `--all-agents <policy>` |
+
+There is no Jev mode to set: FailproofAI Cloud turns it on for a machine while any `jev` or
+`both` policy is deployed there, and off when none is. A publish that names one of
+FailproofAI's sixteen built-in check names is refused with **422 `reserved_jev_name`**; rename
+the check. A deploy whose Cloud checks together exceed the budget is refused
+(`jev_budget_exceeded`, with a per-policy breakdown).
 
 ## Commands that lie to you
 

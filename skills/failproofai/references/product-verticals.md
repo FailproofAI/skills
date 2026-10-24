@@ -109,7 +109,7 @@ second question is correct and inert, and no amount of local testing reveals tha
 | The question | The command | The trap |
 |---|---|---|
 | "write me a policy that blocks X" | `fp policies compose "block force pushes to main"` | Needs **`policies:write`, not `agent:use`** — backwards from the name. It is a single model call: **the draft has never been replayed against anything** |
-| "would it have fired on real traffic?" | dashboard → `/<org>/policy-editor` → pick agent + window, `run backtest` | **No CLI surface.** There is no `fp policies backtest`. Anything claiming one is wrong |
+| "would it have fired on real traffic?" | `fp policies backtest ./rule.mjs --hours 168`, or dashboard → `/<org>/policies/new` → **test** | Session only, and needs `policies:write` **and** `events:read`. For a `jev`/`both` policy the default is a free estimate; `--run` spends the Jev allowance |
 | "does it actually deny that?" | `fp policies test ./rule.mjs --command "git push --force origin main"` | Proves it parses, registers and decides. **Cannot** prove the daemon feeds it the same context |
 | "ship it" | `fp policies publish no-force-push ./rule.mjs` | ***Publishing deploys nothing.*** It mints a version that sits unused |
 | "put it on the machine" | `fp fleet deploy <machine-id> --add no-force-push:observe` | ***A bare `--add` enforces.*** Omit `:observe` and it is live |
@@ -286,8 +286,9 @@ SIGTERM drain vs. the pod's grace period — is **`failproofai-sdk`** (`referenc
 
 Route: **`failproofai-eval-brainstorm`** — scanning the population, confirming the signal is
 really in the telemetry, checking it separates good runs from bad, and converging on two to
-four proposals, each ending in the prompt that authors it. It stops there: the dashboard's
-eval authoring page composes the evaluation, backtests it against real sessions and deploys it.
+four proposals, each ending in the prompt that authors it. It stops there: writing, dry-running
+and deploying the evaluation is **`failproofai-eval-author`** (`fp evaluators draft / dry-run /
+create / deploy`, or the dashboard's eval authoring page).
 
 It replaces the retired `agenteye-evaluator` skill, which scaffolded the v1 evaluator service
 the server POSTed transcripts to — that service no longer exists; the worker in the SDK is its
