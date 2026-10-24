@@ -1,7 +1,7 @@
 ---
 name: failproofai-alert-author
 description: |-
-  How to write a FailproofAI Cloud (AgentEye) alert that fires when it should and stays quiet otherwise: pick the trigger kind from the intent (error event, metric, score, saved query), read the org's own baseline for that number, set window, threshold and "how sure" from it, replay the rule over the last 7 and 30 days, and repair it once if it is noisy or silent.
+  How to write a FailproofAI Cloud alert that fires when it should and stays quiet otherwise: pick the trigger kind from the intent (error event, metric, score, saved query), read the org's own baseline for that number, set window, threshold and "how sure" from it, replay the rule over the last 7 and 30 days, and repair it once if it is noisy or silent.
 
   Trigger when the user wants to:
   • be told when something happens — "tell me when billing starts throwing errors", "page me on a latency spike";

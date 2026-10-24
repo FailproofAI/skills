@@ -74,7 +74,8 @@ claim, "present" is not.
   rows and looks complete. Always `--all --limit 1000`; past that, page with `--cursor`.
 - **`--since` is a closed set** — `all`, `15m`, `1h`, `6h`, `24h`, `7d`. Anything else is
   a usage error; use `--from` / `--to` with RFC3339 for a custom range.
-- **`evals` and `errors` filters are single-valued** — a repeated flag means last-wins.
+- **`evals --score` is repeatable and AND-combined.** Each range is
+  `KEY:MIN..MAX`, with either bound optional. `errors` filters are single-valued;
   `sessions` and `events` take CSV and repeats.
 - **Keep `--full` bound to one `--session-id`.** It is slow at scale, and you do not need
   payloads to read a session's shape.

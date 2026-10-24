@@ -1,7 +1,7 @@
 ---
 name: failproofai-audit-author
 description: |-
-  How to set up a FailproofAI Cloud (AgentEye) AUDIT that looks for the right failures at a sensible scope and cost: turn an intent into the audit form (scope, cadence, window, sensitivity, failures per run, errors to ignore, notify, notes), name the deterministic signals it relies on, preview what it would read and flag over the last window, and say when an alert, an evaluation or a policy is the better tool.
+  How to set up a FailproofAI Cloud AUDIT that looks for the right failures at a sensible scope and cost: turn an intent into the audit form (scope, cadence, window, sensitivity, failures per run, errors to ignore, notify, notes), name the deterministic signals it relies on, preview what it would read and flag over the last window, and say when an alert, an evaluation or a policy is the better tool.
 
   Trigger when the user wants to:
   • set up a recurring sweep — "sweep the customer-facing agents weekly for leaked keys", "a daily reliability review of prod";

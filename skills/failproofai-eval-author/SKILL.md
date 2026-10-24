@@ -1,7 +1,7 @@
 ---
 name: failproofai-eval-author
 description: |-
-  How to WRITE a hosted FailproofAI Cloud (AgentEye) evaluation once you know what to measure: pick the mechanism (python "code", a "jev" classifier, or an LLM "judge"), emit the exact JSON draft the evaluation form takes, write the one-expression Python against the session surface, ground every payload key in the org's own event shapes, and repair a draft from a dry-run error or a backtest verdict.
+  How to WRITE a hosted FailproofAI Cloud evaluation once you know what to measure: pick the mechanism (python "code", a "jev" classifier, or an LLM "judge"), emit the exact JSON draft the evaluation form takes, write the one-expression Python against the session surface, ground every payload key in the org's own event shapes, and repair a draft from a dry-run error or a backtest verdict.
 
   Trigger when the user wants to:
   • write an evaluation — "score tool error rate", "check it never refunds without checking policy";

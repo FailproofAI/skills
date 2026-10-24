@@ -10,7 +10,7 @@ description: |-
 
   Stops at the proposal; never writes evaluator code.
 
-  NOT for authoring or deploying the evaluation itself (the eval authoring page does that, from this prompt), reading scores that already exist or spotting a regression (`fp-cloud-cli`), making an agent emit events at all (`failproofai-sdk`), or turning a recurring behaviour into enforcement (`failproofai-policy-author`).
+  NOT for authoring or deploying the evaluation itself (`failproofai-eval-author`), reading scores that already exist or spotting a regression (`fp-cloud-cli`), making an agent emit events at all (`failproofai-sdk`), or turning a recurring behaviour into enforcement (`failproofai-policy-author`).
 ---
 
 # Finding what to evaluate
