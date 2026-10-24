@@ -107,7 +107,8 @@ evaluation itself, so nothing here scaffolds an evaluator service any more.
 |---|---|
 | Stop a behaviour — "agents keep force-pushing", turn audit findings into enforcement, make a CLAUDE.md real, write/enable a policy | **`failproofai-policy-author`** |
 | Publish tested policies as a GitHub pack others can install | **`failproofai-policy-publish`** |
-| Publish a Cloud policy version, deploy it to fleet machines, observe, enforce, or roll back | **`fp-cloud-cli`** |
+| Write a FailproofAI Cloud `jev` or `both` policy — its Jev checks (JSON declarations), the regex floor they review, scoping it to some agents | **`failproofai-policy-author`** (`references/cloud-jev.md`) |
+| Publish a Cloud policy version, deploy it to fleet machines (all agents, an integration, or one profile), observe, enforce, read history, or roll back | **`fp-cloud-cli`** |
 | Query FailproofAI Cloud — browse sessions, events, errors, evals; triage issues/alerts; manage keys, users, roles, settings | **`fp-cloud-cli`** (the cloud CLI skill) |
 | Decide what to score — which dimensions are worth tracking, grounded in real sessions | **`failproofai-eval-brainstorm`** |
 | Write or fix a hosted evaluation once you know what to measure — code vs jev vs judge, the Python, grounding its payload keys, repairing a dry-run error | **`failproofai-eval-author`** |
@@ -210,9 +211,17 @@ One URL and one token configure **two independent capabilities**:
 | Pull managed policy | `policies:pull` | `GET <base>/enforcement/v1/desired-state` | `credentials.json` |
 | Push events/transcripts | `events:add` | empty `POST <base>/v1/events` | collector block + ingest credential |
 
+A person at the machine just runs `failproofai config` and picks **Log in to FailproofAI
+Cloud**: the browser sign-in mints and claims a machine key, with no key to copy. Scripted or
+headless, mint a key (`references/end-to-end-setup.md` step 5) and pass it:
+
 ```bash
 failproofai config --connect https://app.befailproof.ai --token "<one-time-secret>"
 ```
+
+Setup also writes a small `failproofai` pointer skill into each agent's own skills folder,
+which reads this skill live from the FailproofAI/skills repository; a folder without its
+`.failproofai-managed` marker is never touched (`references/end-to-end-setup.md`).
 
 Each half is probed **before** anything is written, and only what verified is written. So a
 partial success is normal and is reported per-half.
@@ -222,9 +231,9 @@ Four traps here, all of which have bitten people:
 - **The exit code tracks only the policy half.** An `events:add`-only key writes a working
   ingest credential and still exits 1. Never `&&`-chain on this command — read the output.
 - **Transcripts are sent by default.** `--no-transcripts` limits to hook decisions. It is
-  matched by exact string, and the `config` branch validates *no* unknown flags — so
-  `--no-transcript`, `--notranscripts`, any typo, is silently ignored and full transcripts
-  (prompts, file contents) ship. Confirm with `config --status`, not with the exit code.
+  matched by exact string; current builds reject a typo (`--no-transcript` exits 1,
+  "Unexpected argument"), older ones ignored it and shipped full transcripts (prompts, file
+  contents). Confirm with `config --status`, not with the exit code.
 - **The machine id does not default to the hostname**, despite what `config --help` says. It
   is an explicit `--machine-id`, else the one already on disk, else a random UUID. The
   hostname is only the mutable **label**. Passing `--machine-id "$(hostname)"` on several
@@ -349,7 +358,7 @@ dashboard required:
 | 3. Deploy it pinned, **in observe**, to one machine | `fp fleet deploy <machine-id> --add <policy-id>@3:observe` |
 | 4. Run a real session, then read what it would have done | `fp guardrails summary`, `fp guardrails timeline` |
 | 5. Promote that one machine to enforce, then expand | `fp fleet deploy <machine-id> --add <policy-id>@3:enforce` |
-| 6. Roll back | `fp fleet rollback <machine-id>` |
+| 6. Roll back | `fp fleet history <machine-id>`, then `fp fleet rollback <machine-id> <deployment>` |
 
 Three things that bite before you get through it:
 
@@ -361,6 +370,12 @@ Three things that bite before you get through it:
   write the effect. Effects are exactly `enforce` and `observe`.
 - **Every `policies`/`fleet`/`guardrails` subcommand except `policies test` exits 2 under an
   API key.** This rollout is a human-session operation; CI cannot drive it.
+
+The same rollout carries every policy kind. `--kind jev --semantic checks.json` publishes Jev
+checks alone, `--kind both --source rule.mjs --semantic checks.json` a regex floor its own
+checks review (that is what makes a Cloud policy's blocks reviewable; a `regex` one is always
+hard). Which agents an assignment covers is chosen at deploy, not in the code:
+`--target <policy>=codex`, `--target <policy>=hermes/agt_<id>`, `--all-agents <policy>` to undo.
 
 Step 1 needs no server, no auth, no fleet and nothing installed in the working directory —
 the CLI shims the `failproofai` module itself. It wants only `node` on PATH:

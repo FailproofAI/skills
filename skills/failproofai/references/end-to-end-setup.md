@@ -16,6 +16,12 @@ machine is wired up. Two binaries, two installs, two independent verifications.
 Do them in that order. The step an agent cannot perform is `fp login`, and discovering
 that after you have half-provisioned a machine wastes the turn — read *Step 3* first.
 
+**The shortest path, for a person at the machine:** `npm i -g failproofai`, then
+`failproofai config` and pick **Log in to FailproofAI Cloud**. The browser sign-in mints and
+claims this machine's key itself, so steps 2–5 are not needed to connect it. The diagram
+above is the key path: use it when setup is scripted, the box is headless, or an agent is
+driving and needs `fp` anyway.
+
 **What was verified.** Every `fp` command quoted here was run against the shipped CLI
 (`fp-cloud-cli` 0.0.1b1). The `failproofai` half is from the package source and the
 shipped docs: the binary could not be executed while this was written, because a local
@@ -163,6 +169,10 @@ almost every "the command doesn't work" report at this stage is a missing grant.
 
 ## Step 5 — mint a machine key
 
+Skip this step when a person will pick **Log in to FailproofAI Cloud** in the wizard (step 6):
+that mints the machine key for them. Mint one yourself for `--connect`, `--token`, or any
+setup nobody is watching.
+
 A machine does not authenticate as you. It carries a scoped API key, and that key drives
 exactly two independent capabilities:
 
@@ -211,19 +221,42 @@ failproofai config --connect https://app.befailproof.ai --token "<key>"
 pull, no transcript capture and no delivery — the machine looks configured and ships
 nothing.
 
-The wizard is one linear flow, and it is shorter than it used to be. It installs the daemon,
-wires hooks into **all twelve supported agent CLIs at global scope**, offers to connect, and
-applies. It does not ask about scope, it does not ask which agents you use, and **it does not
-ask about policies** — there is no policy step, no themed bundles, and no recommended set.
+The wizard is one linear flow: daemon, connect, agents, done. It installs the daemon, offers
+to connect, asks which agents to trace, and applies after the last answer. It does not ask
+about scope (always user scope), and **it does not ask about policies** — there is no policy
+step, no themed bundles, and no recommended set.
 
 | Stage | What happens | Are you asked |
 |---|---|---|
 | daemon | `failproofaid`, installed **first** because it is the only step needing a password. `sudo -v` primes on a clean terminal, before any frame is drawn | no — required, and setup refuses outright on any platform `failproofaid` does not run on |
-| scope | global, always | no |
-| harnesses | all twelve, detected or not. An agent installed next week is guarded from its first tool call | no |
+| connect | **Log in to FailproofAI Cloud** (recommended: opens your browser, where you sign in or sign up and pick or create an org; the CLI then claims a machine key minted for it), **Paste an API key** (one you already have, e.g. from step 5), or **Use open source** (fully local). Re-running offers *Keep current connection* / *Log in again* | yes |
+| agents | "Which agents should failproofai trace?": all twelve are listed, detected ones ticked on a first run, the saved selection on a re-run. Hooks, collection and backfill follow this one list; `--agents <a,b\|all>` answers it without asking | yes, unless `--agents` or off a TTY |
 | policies | **nothing.** Whatever was already enabled at that scope is read and carried through untouched | no — there is no policy step |
-| connect | paste a scoped key, or stay fully local | yes |
-| review | shows exactly which files change, then applies | yes, unless off a TTY or `--token` already answered the run |
+| skill | writes a small `failproofai` pointer skill into each detected or ticked agent's own user-scope skills folder (*The managed pointer skill*, below) | no |
+| done | applied after the last answer; there is no separate review. Esc at any earlier step changes nothing | — |
+
+If the dashboard predates browser login, the wizard says so and falls back to pasting a key.
+On a headless box with no browser, mint the key yourself (step 5) and use `--token` or
+`FAILPROOFAI_CLOUD_TOKEN`.
+
+### The managed pointer skill
+
+Setup puts one file, `failproofai/SKILL.md`, in every agent's own user-scope skills folder
+(`~/.claude/skills`, `~/.codex/skills`, `~/.copilot/skills`, `~/.cursor/skills`,
+`~/.config/opencode/skills`, `~/.pi/agent/skills`, each Hermes and OpenClaw profile's
+`skills/`, `~/.factory/skills`, `~/.config/devin/skills`, `~/.gemini/config/skills`,
+`~/.config/goose/skills`; the agents' own `*_HOME` overrides are honoured). It carries no
+instructions: it tells the agent to fetch this skill and its siblings live from
+`raw.githubusercontent.com/FailproofAI/skills/main/skills/…`, so what is on this repository's
+`main` is what every enrolled agent reads next, with no release and no re-run.
+
+- Beside it sits an empty **`.failproofai-managed`** marker. Only a folder with the marker is
+  ever rewritten or removed; a `failproofai` folder without it (for instance the full skill
+  installed with `npx skills add FailproofAI/skills`) is left alone.
+- Codex also reads `~/.agents/skills`; when the full skill is there, setup skips (and removes
+  its own copy of) the Codex pointer so it is not listed twice.
+- `failproofai uninstall` removes the marked folders. A folder that cannot be written is
+  logged and skipped; it never fails setup.
 
 Three consequences worth stating before you run it:
 
@@ -255,10 +288,10 @@ Four traps on this one command:
 - **The exit code tracks only the policy half.** An `events:add`-only key writes a working
   ingest credential, prints "Connected … for dashboard reporting only", and exits **1**.
   Never `&&`-chain on `--connect`; read stdout.
-- **Transcripts are sent by default**, and `--no-transcripts` is matched by exact string
-  while the `config` branch validates no unknown flags at all. `--no-transcript`,
-  `--notranscripts`, any typo, is silently ignored and full transcripts — prompts, file
-  contents — ship. Confirm the result with `config --status`, not with the exit code.
+- **Transcripts are sent by default**, and `--no-transcripts` is matched by exact string.
+  Current builds reject a typo (`--no-transcript` exits 1, "Unexpected argument"); older
+  builds ignored it silently and shipped full transcripts — prompts, file contents. Confirm
+  the result with `config --status`, not with the exit code.
 - **No `--flag=value` form.** `--token=abcdefgh` parses as *no token* and the command exits
   1. Space-separate every value.
 - **The machine id does not default to the hostname.** Passing `--machine-id "$(hostname)"`

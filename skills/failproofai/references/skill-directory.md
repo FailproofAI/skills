@@ -27,13 +27,13 @@ with that command.
 
 ## Six of these are mirrors
 
-`fp-cloud-cli` and `failproofai-sdk` are synced from `FailproofAI/failproofai`;
+`fp-cloud-cli` and `failproofai-sdk` are synced from `FailproofAI/failproofai` by a workflow;
 `failproofai-eval-brainstorm`, `failproofai-eval-author`, `failproofai-alert-author` and
-`failproofai-audit-author` are synced from the private `FailproofAI/agenteye` repository. All six
-are marked **do-not-hand-edit.** Patching them here is a
-maintenance bug: the next sync silently reverts your change, and in the meantime two copies
-of the same claim disagree. Fix upstream, or carry the correction in a skill that is
-maintained here — `failproofai`, `failproofai-policy-author`, and
+`failproofai-audit-author` are copies of the skills FailproofAI Cloud's own dashboard
+assistant runs on. All six are **do-not-hand-edit.** Patching them here is a
+maintenance bug: the next sync or copy silently reverts your change, and in the meantime two
+copies of the same claim disagree. Fix them at their source, or carry the correction in a
+skill that is maintained here — `failproofai`, `failproofai-policy-author`, and
 `failproofai-policy-publish`.
 
 The mirror folders match their shipped skill names: `skills/fp-cloud-cli/`,

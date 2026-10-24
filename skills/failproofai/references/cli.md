@@ -69,8 +69,7 @@ Do not copy these lines into anything. Each is contradicted by the code beside i
 |---|---|---|
 | `config --help`: "the machine id defaults to this host's name" | It never touches the hostname. Explicit `--machine-id` → the id already on disk → `randomUUID()`. Hostname is only the mutable **label** | `cloud-enrollment.ts`, grep `resolveMachineId`, `resolveMachineLabel` |
 | `backfill --help`: "follows [collector] in `~/.failproofai/config.toml`" | `config.toml` is the layout-2 name. The live file is `config.json`, and the layout gate **deletes** any `config.toml` it finds | `fp-home.ts`, grep `configFile`, then `legacy` → `configToml` |
-| `config --help`: "Walks you through 4 quick steps" | Six. Step 0 is the daemon (sudo, before any TUI frame) and step 4 is cloud enrolment — the two that decide whether the machine does anything | `configure-wizard.ts`, grep `step` markers |
-| Doc comment: "`config --status --verbose` prints the full id" | No `--verbose` exists. Nothing parses it, and the `config` branch validates no flags at all — it is **silently swallowed** | `cloud-enrollment-cli.ts`, grep `verbose` |
+| Doc comment: "`config --status --verbose` prints the full id" | No `--verbose` exists. Current builds reject it ("Unexpected argument: --verbose"); older builds, whose `config` branch validated no flags, **silently swallowed** it | `cloud-enrollment-cli.ts`, grep `verbose` |
 | `audit --help`: "only a scheduled digest ever leaves it" | True of a bare audit. `--schedule` signs you in and each report sends counts, redacted example commands, machine id, hostname, platform | `audit/schedule-cli.ts`, grep `reportsConsentedAt` |
 | CLI error hints: `https://be.failproof.ai` | Stale host. Current docs and `DEFAULT_INGEST_URL` both say `https://app.befailproof.ai` | `collector-config.ts`, grep `DEFAULT_INGEST_URL` |
 
@@ -97,9 +96,10 @@ conventional option parser and takes `--timeout=5` and the like without complain
 
   `--scope` is **not** among them, despite sitting beside `--cli` in the same `policies add`
   invocation and reading like a set with it. Write it as two tokens.
-- **Unknown-flag validation is per-branch, and `config` has none.** `failproofai config
-  --statuss` does not error — it falls through every check and **launches the interactive
-  wizard**. Same for a mistyped `--no-transcript`, `--disconect`, or any typo at all.
+- **Unknown-flag validation is per-branch.** `config` now has an allowlist (`CONFIG_FLAGS`
+  in `bin/failproofai.mjs`): `failproofai config --statuss`, a mistyped `--no-transcript` or
+  `--disconect` exits 1 with "Unexpected argument". Older builds had none and **launched the
+  interactive wizard** on any typo.
 - **`--cli` is greedy and stops at the first token that is not a known CLI name.** So `--cli
   bogus` reports "Missing value(s) for --cli", never "unknown CLI", and `--cli claude
   block-sudo` correctly reads `block-sudo` as a policy — which means a typo'd CLI name is

@@ -143,7 +143,7 @@ cloud side of it runs its own five-stage lifecycle, with six nouns that
 | **Policy version** | one immutable snapshot of a policy's source; publishing mints a new one and **never edits in place** | `fp policies publish` |
 | **Deployment** | one applied change to the set a machine runs, numbered monotonically | `fp fleet deploy` |
 | **Effect** | `enforce` or `observe`, per policy per machine — exactly those two words, in the ref grammar `id@v:effect` | `fp fleet deploy --add` |
-| **Carrier** | a machine currently running some version of a policy; `--json` returns `carriers`, machine id → live version, so you can see what a publish left behind | `fp policies publish --json` |
+| **Carrier** | a machine currently running some version of a policy; `--json` returns `carriers`, machine id → live version, so you can see what a publish left behind | `fp --json policies publish` |
 | **Guardrail** | a policy in its deployed, deciding role — evaluated/blocked totals and per-policy outcomes over a window | `fp guardrails summary` \| `timeline` |
 | **Drift** | intent vs delivery: a machine told to run version N that last pulled M. `--json` computes `drifted` for you | `fp fleet diff` |
 

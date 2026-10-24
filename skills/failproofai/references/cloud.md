@@ -183,8 +183,27 @@ command that ships.
 The lifecycle is compose → test → publish → `fleet deploy` → guardrails, and every step of it
 has traps worth more than a table row: **publishing deploys nothing**, a bare `--add` on a new
 policy lands it in `enforce`, `disable` stops enforcement while `delete` does not, and
-`policies compose` needs `policies:write` rather than the `agent:use` its name suggests. All
-of that belongs to **`fp-cloud-cli`**; go there before you run any of it. What
+`policies compose` needs `policies:write` rather than the `agent:use` its name suggests.
+
+Three choices shape every rollout, and only the first is in the version:
+
+- **Kind**, at publish: `regex` (JavaScript, the default), `jev` (Jev checks only, a JSON
+  array of declarations via `--semantic`), or `both` (`--kind both --source rule.mjs
+  --semantic checks.json`: the JavaScript blocks, and FailproofAI Cloud makes those blocks
+  reviewable by the policy's own checks). Jev checks run on FailproofAI Cloud; nothing is
+  installed on the machine, and there is no Jev mode to set.
+- **Effect**, per machine and per policy at deploy: `:enforce` (the default, the dashboard's
+  *enforcing now*) or `:observe` (*observing first*: evaluated and recorded, decides nothing).
+  It applies to every kind, both halves of a `both` included.
+- **Agents**, per assignment at deploy: all (default), an integration
+  (`--target <policy>=codex`), or one exact profile (`--target <policy>=hermes/agt_<id>`);
+  `--all-agents <policy>` clears it.
+
+`fp fleet history <machine>` lists the generations (with each one's Jev mode), and
+`fp fleet rollback <machine> <n>` mints a new generation carrying generation *n*'s set and
+Jev mode; the dashboard's machine card has the same log, *restore this set*. All of that
+belongs to **`fp-cloud-cli`** (Jev declarations: `failproofai-policy-author`,
+`references/cloud-jev.md`); go there before you run any of it. What
 belongs *here* is the one constraint that is an auth fact:
 
 **Every `policies`, `fleet` and `guardrails` subcommand except `policies test` exits 2 under

@@ -95,7 +95,7 @@ folding that into `stopped` made healthy daemons look dead.
 `failproofai daemon install|start|stop` subcommand at all — grep confirms no `=== "daemon"`
 dispatch in `bin/failproofai.mjs`. `config --connect` never installs one.
 
-The wizard's step 0, in order (`configure-wizard.ts`, grep `installDaemonService`):
+The wizard's first step (the daemon), in order (`configure-wizard.ts`, grep `installDaemonService`):
 
 1. `primeElevation()` runs `sudo -v` once with inherited stdio so the prompt is visible; every
    later privileged step uses `sudo -n` and never prompts from under the TUI.

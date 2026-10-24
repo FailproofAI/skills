@@ -109,7 +109,7 @@ second question is correct and inert, and no amount of local testing reveals tha
 | The question | The command | The trap |
 |---|---|---|
 | "write me a policy that blocks X" | `fp policies compose "block force pushes to main"` | Needs **`policies:write`, not `agent:use`** — backwards from the name. It is a single model call: **the draft has never been replayed against anything** |
-| "would it have fired on real traffic?" | dashboard → `/<org>/policy-editor` → pick agent + window, `run backtest` | **No CLI surface.** There is no `fp policies backtest`. Anything claiming one is wrong |
+| "would it have fired on real traffic?" | dashboard → `/<org>/policies/new` → describe it or *write it yourself* → **test**: pick how far back + whose calls | **No CLI surface.** There is no `fp policies backtest`. Anything claiming one is wrong |
 | "does it actually deny that?" | `fp policies test ./rule.mjs --command "git push --force origin main"` | Proves it parses, registers and decides. **Cannot** prove the daemon feeds it the same context |
 | "ship it" | `fp policies publish no-force-push ./rule.mjs` | ***Publishing deploys nothing.*** It mints a version that sits unused |
 | "put it on the machine" | `fp fleet deploy <machine-id> --add no-force-push:observe` | ***A bare `--add` enforces.*** Omit `:observe` and it is live |

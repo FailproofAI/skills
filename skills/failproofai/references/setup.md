@@ -16,7 +16,7 @@ each is written by a different command — which is why partial installs are the
 
 | Thing | Where | Written by |
 |---|---|---|
-| Hook entries in each agent CLI's settings | per-harness, per-scope (`harnesses.md`) | wizard (all 12 CLIs), `policies --install` |
+| Hook entries in each agent CLI's settings | per-harness, per-scope (`harnesses.md`) | wizard (the agents you tick), `policies --install` |
 | **Installed packs — where enforcement comes from** | `~/.failproofai/policies/packs/installed.json`, `artifacts/<sha256>.mjs` | `policies add`, **never the wizard** |
 | The legacy enabled-builtin set | `~/.failproofai/policies-config.json` (user), `.failproofai/` (project) | wizard (carried, never chosen), `policies --install` |
 | The daemon: binary, service unit, `daemon.configured` | `~/.failproofai/bin/failproofaid-<ver>`, `/etc/systemd/system/failproofaid@<user>.service` or `/Library/LaunchDaemons/ai.failproof.failproofaid.<user>.plist`, `config.json` + `VERSION` | **`failproofai config` only** |
@@ -46,16 +46,12 @@ coexist — the second loses the flock race and exits.
 ## The wizard, step by step
 
 `failproofai config` (aliases `configure`, `setup`). One sudo prompt and two questions, and
-**neither question is about what this machine enforces.** Setup installs the daemon, wires
-hooks into every supported agent, and offers to connect to Cloud. Choosing policies is a
-separate act, taken later and on purpose — `failproofai policies add`.
-
-**Do not read `configure-wizard.ts`'s header docblock.** It still lists a six-step flow
-including `2. Policies — multi-select of themed presets (combine any) or Everything`. That
-flow is deleted; the code 900 lines below the comment is the truth, and so is `config
---help`, which states it outright: *"It chooses NO policies — take some with: `failproofai
-policies add <owner>/<repo>`"*. The in-code step numbers are stale for the same reason —
-`// 2 — Which harnesses?` sits above a hardcoded constant that asks nothing.
+**neither question is about what this machine enforces.** Setup installs the daemon, offers to
+connect to Cloud, asks which agents to trace, and applies. Choosing policies is a separate
+act, taken later and on purpose — `failproofai policies add`. `config --help` states it
+outright: *"It chooses NO policies — take some with: `failproofai policies add
+<owner>/<repo>`"*. The header docblock of `configure-wizard.ts` lists the current four steps
+(daemon, connect, agents, done); in-code step comments further down may be older.
 
 Two hard gates run *before* the first frame is drawn:
 
@@ -67,26 +63,29 @@ Two hard gates run *before* the first frame is drawn:
 
 | Step | Question | What it writes | On failure |
 |---|---|---|---|
-| **0** | none — daemon install (a sudo prompt, not a question) | binary, service unit, `daemon.configured: true`, `VERSION.daemon` | **aborts, machine untouched** |
-| **1** | Connect to Cloud, or stay local? then the key | nothing yet (key is probed, not stored) | interactively non-fatal; unattended it aborts `cloud_unverified` |
-| **2** | Ready to apply? | everything, in the order below | daemon failure aborts; cloud failure warns |
+| **1** | none — daemon install (a sudo prompt, not a question) | binary, service unit, `daemon.configured: true`, `VERSION.daemon` | **aborts, machine untouched** |
+| **2** | Connect: **Log in to FailproofAI Cloud** (browser), **Paste an API key**, or **Use open source**; a re-run also offers *Keep current connection* | nothing yet (a pasted key is probed, a login approval is held, neither stored) | interactively non-fatal; unattended it aborts `cloud_unverified` |
+| **3** | "Which agents should failproofai trace?" — all twelve listed; a first run ticks the detected ones, a re-run restores the saved list. `--agents <a,b\|all>` answers it | nothing yet | — |
+| **4** | none — applied after the last answer; there is **no separate review screen** | everything, in the order below | daemon failure aborts; cloud failure warns |
 
-Everything else is now a constant, not a prompt:
+Everything else is a constant, not a prompt:
 
-| Not asked any more | What it is instead | Where |
+| Not asked | What it is instead | Where |
 |---|---|---|
-| Recommended vs Customize | no opening fork; one linear flow | — |
-| Where: global / project / both | **always global** | `const target: SetupTarget = "user"` |
-| Which harnesses? | **all 12 supported CLIs**, detected or not | `const clis = [...clisSupportingScope(primaryScope)]` |
-| What should we guard against? | **nothing is chosen** — whatever is already enabled at that scope is read and carried | `const enabledHere = readScopedHooksConfig(primaryScope, cwd).enabledPolicies ?? []` |
-| Load custom policies? (checkbox) | **left alone**, never written | `const customEnabled: boolean \| undefined = undefined` |
+| Where: global / project / both | **always global** (user scope) | — |
+| What should we guard against? | **nothing is chosen** — whatever is already enabled at that scope is read and carried | `readScopedHooksConfig("user", cwd).enabledPolicies` |
+| Install the skill? | a `failproofai` pointer skill goes into each detected or ticked agent's own skills folder, marked `.failproofai-managed`; an unmarked folder of that name is never touched | `installAgentSkill` (`agent-skill.ts`) |
 
-Nothing at all is written until you pick **Yes, apply now** at step 2. The review screen
-lists the literal settings-file paths it is about to touch (grep `This will update:`), and
-its Policies line reads `none enabled` on a fresh machine — a true statement about a
-deliberate choice, not a lost selection.
+Agents left unticked lose their user-scope hooks; hooks, collection and backfill all follow
+the one saved list. Esc at any step before apply changes nothing.
 
-### Step 0 is the whole reason the wizard exists
+**Browser login** (`cloud-login.ts`): the CLI asks the dashboard for a link, the person signs in
+or signs up and picks or creates an org in the browser, the CLI polls for the approval, and at
+apply — after the daemon installs — claims a machine key minted for it, exactly once. An
+approval never claimed leaves no key behind. A dashboard that predates browser login gets
+"doesn't support logging in from here yet. Paste an API key instead."
+
+### Step 1 (the daemon) is the whole reason the wizard exists
 
 It runs first because it is the only step that needs a password, and `sudo -v` must
 prompt on a clean terminal — fired from underneath a drawn TUI the prompt is invisible
@@ -186,7 +185,7 @@ anyone typed before still runs. Document `policies`. **The pack lane in depth �
 digest pinning, selection flags, `--cli` narrowing — belongs to
 `failproofai-policy-publish`.**
 
-### Step 1 writes nothing, and that is deliberate
+### Step 2 (connect) writes nothing, and that is deliberate
 
 The key is validated against the ingest endpoint immediately (`validateIngestKey`) so a
 typo is caught while the user is still thinking about credentials. On a failed probe you
@@ -199,10 +198,9 @@ The URL is **not asked for**. It is `https://app.befailproof.ai` unless
 way, and named on screen. An invalid override cancels the run rather than falling back to
 the hosted service.
 
-The wizard always connects with `sessions: true` — full transcripts, disclosed in the body of
-the question rather than a hint. **`config --no-transcripts` is parsed into the wizard's
-answers and never read**, so it silently does nothing on this path; the flag only takes
-effect on `--connect`.
+The wizard connects with full transcripts by default, disclosed in the body of the question
+rather than a hint. `config --no-transcripts` turns them off for the wizard's connection too
+(`sessions: answers.noTranscripts !== true`).
 
 ### Apply order, and what each abort costs you
 
@@ -241,8 +239,9 @@ FAILPROOFAI_CLOUD_TOKEN="$KEY" failproofai config < /dev/null
 failproofai policies add FailproofAI/policies --cli claude codex
 ```
 
-That produces the whole machine: daemon, hooks in all 12 agents, credentials — and then, as
-a separate command, something to enforce.
+That produces the whole machine: daemon, hooks in the detected agents (all twelve when none
+is detected; pass `--agents` to choose), credentials — and then, as a separate command,
+something to enforce.
 
 - **Passwordless sudo is the one hard requirement.** Headless runs never call `sudo -v`;
   they probe `sudo -n` and abort `needs_root` (exit 1) if it fails, printing the privileged
@@ -255,12 +254,12 @@ a separate command, something to enforce.
 - **A key the server refuses is a failed setup, not a warning.** Headless gets
   `cloud_unverified` and exit 1 — there is nobody to weigh "save it anyway", and a run that
   exited 0 here would leave a fleet believing it was reporting.
-- **`--no-transcripts` does nothing on this path.** The wizard accepts the field and never
-  reads it; `connectToCloud` is called with `sessions: true` hardcoded. For decisions-only,
-  set the machine up first and enrol separately with `failproofai config --connect <url>
-  --token <key> --no-transcripts`.
-- `--token` also pre-answers the whole run **on a TTY**: no connect question, no review
-  screen. The sudo password is the only thing left that can stop it.
+- **`--no-transcripts` works on this path** (decisions only). Older builds ignored it here and
+  sent transcripts anyway; on one of those, enrol separately with `failproofai config
+  --connect <url> --token <key> --no-transcripts`.
+- `--token` also pre-answers the whole run **on a TTY**: no connect question and no agents
+  question (the detected agents, or the saved list on a re-run). The sudo password is the
+  only thing left that can stop it.
 - Implicit onboarding still never fires headless. `maybeFirstRunConfigure` keeps its own TTY
   check and only hints — `[failproofai] Not set up yet — run failproofai config to get
   started.` — so setup never runs off the back of some other command in CI.
@@ -300,9 +299,9 @@ failproofai config --connect <url> --token <key> \
 
 **No `--flag=value` form.** Verified live: `--token=abcdefgh` is parsed as *no token* and
 the command exits 1 with "--connect needs a machine token". `--connect` with a missing
-value throws "Missing value after --connect." (exit 1). And the `config` branch validates
-no unknown flags at all — verified live, `config --status --bogus-flag` exits 0 and prints
-normal output.
+value throws "Missing value after --connect." (exit 1). Any flag `config` does not take is
+rejected (`CONFIG_FLAGS` in `bin/failproofai.mjs`): `config --status --bogus-flag` exits 1
+with "Unexpected argument: --bogus-flag". Older builds validated nothing here and ignored it.
 
 ### Three requests, two capabilities
 

@@ -984,7 +984,7 @@ is the map; `skills/failproofai/references/cli.md` is the authority on every edg
 
 | Command | Flags |
 |---|---|
-| `config` (aliases `configure`, `setup`) | `--connect <url> --token <key>`, `--machine-id`, `--machine-label`, `--no-transcripts`, `--disconnect`, `--status`, `--pause [<dur>] [--session <id>]`, `--resume [--all] [--session <id>]` |
+| `config` (aliases `configure`, `setup`) | bare: the wizard, whose cloud step offers **Log in to FailproofAI Cloud** in a browser. `--token <key>` (prefer `FAILPROOFAI_CLOUD_TOKEN`), `--oss`, `--agents <a,b\|all>`, `--url <url>`, `--connect <url>`, `--machine-id`, `--machine-label`, `--no-transcripts`, `--disconnect`, `--status`, `--pause [<dur>] [--session <id>]`, `--resume [--all] [--session <id>]`. Anything else is rejected |
 | `policies` (aliases `policy`, `pack`, `p`) | `--install`/`-i`, `--uninstall`/`-u`, `--scope user\|project\|local[\|all]`, `--cli`, `--beta`, `--custom`/`-c` |
 | `policies add\|remove <name>` | `--scope`, `--cli`, `--beta` **only** — `--custom` is a hard error here |
 | `policies add\|remove <owner>/<repo>` | The **pack** lane, chosen by the slash: `[--policy a,b\|--only a,b] [--category x,y] [--all] [--cli <agent>…]`. `--scope` is ignored — a pack install is machine-level |
@@ -1002,9 +1002,12 @@ is the map; `skills/failproofai/references/cli.md` is the authority on every edg
 
 Traps that decide whether a command did what you think:
 
-- **`config` validates no flags at all.** `failproofai config --statuss` does not error — it
-  falls through every check and launches the interactive wizard. Same for `--disconect` or any
-  typo.
+- **`config` rejects any flag it does not take.** `failproofai config --statuss` exits 1 with
+  "Unexpected argument: --statuss" and a pointer to `failproofai config --help`; a flag with
+  the wrong dash count (`-status`) gets "Did you mean `failproofai config --status`?". Older
+  builds silently launched the wizard on a typo, so on one of those check the version first.
+  `--send-transcripts` is retired but still accepted (it does nothing; transcripts are on by
+  default, and it cannot be combined with `--no-transcripts`).
 - **`--cli` is greedy** and stops at the first token that is not a known CLI name, so a typo'd
   CLI name is silently reinterpreted as a policy name. Twelve names, everywhere the same set:
   `claude codex copilot cursor opencode pi hermes openclaw factory devin antigravity goose`.
