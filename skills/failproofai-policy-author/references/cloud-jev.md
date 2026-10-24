@@ -184,4 +184,6 @@ the policy's checks was asked about the call and **none** answered deny. So:
   shows the call count before it runs, and counts those calls against the org's daily Jev
   allowance. It reports each check's fire rate with examples; preconditions and the user's
   words are not reconstructed from history, so treat a gated check's rate as an upper bound.
-  It also shows what the checks cost of the question budget.
+  It also shows what the checks cost of the question budget. From a terminal:
+  `fp policies backtest --semantic checks.json` (add the module file for `both`) is the free
+  estimate; add `--run --sample N` to ask Jev, after the user agrees to the spend.

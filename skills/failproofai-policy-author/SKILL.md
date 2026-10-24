@@ -972,14 +972,21 @@ it on anything you are about to publish to a fleet: a rule that is correct on tw
 cases and fires 262 times across the window — 50 of them on anything real — is not shippable,
 and only the replay says so.
 
-**There is no CLI surface.** `fp policies` has eight subcommands — `list show publish enable
-disable delete test compose` — and none of them backtests. Do not send the user looking for
-one. `compose` is the un-backtested draft path, and local `test` checks only the cases you
-supply. The backtest lives in the dashboard's new-policy flow,
-`https://app.befailproof.ai/<org>/policies/new` (*describe → review → test → turn on*; the
-older `/<org>/policy-editor` links still land on it): describe the rule, or **write it
-yourself** to paste the `.mjs`, then at **test** pick how far back (last 24 hours / 7 days /
-30 days, default 7 days) and whose calls (all agents, or one) and it replays them. A fleet
+**From a terminal, use `fp policies backtest <file|id>`.** It replays a local `.mjs` (or
+`@path`, `-`) or a published policy id against stored calls; narrow it with `--hours N`,
+`--agent-id A`, `--env E`. `fp policies author "<intent>" [--kind regex|jev|both]` drafts
+and backtests a policy grounded on the org's events; for an issue, first use
+`fp policies candidacy --issue <id>` to check whether enforcement fits. None of the three
+publishes anything. All three need a signed-in session (`fp login`); with an API key they
+exit 2 with "needs a signed-in session: run `fp login`". `compose` is still the
+un-backtested draft path, and local `test` still checks only the cases you supply.
+A `jev` or `both` policy (a published id of that kind, or `--semantic checks.json`) gets a
+free **estimate** by default; `--run` actually asks Jev about up to `--sample N` (≤ 50)
+stored calls and **spends the org's Jev allowance** — ask the user first.
+The dashboard equivalent is the new-policy flow, `https://app.befailproof.ai/<org>/policies/new`
+(*describe → review → test → turn on*; older `/<org>/policy-editor` links still land on it):
+describe the rule, or **write it yourself** to paste the `.mjs`, then at **test** pick how far
+back (last 24 hours / 7 days / 30 days, default 7 days) and whose calls. A fleet
 replay needs **`policies:write` and
 `events:read` — both**. `policies:write` alone gets 403, because a replay runs caller-supplied
 code over stored payloads and hands back whatever the policy returned as its reason. Demo orgs
@@ -1246,7 +1253,12 @@ real shape is `ctx.toolName === "execute_code"`, reading `ctx.toolInput.code` �
 string**, with the project key inside it — scoped by `ctx.cli === "hermes"`.
 `references/patterns.md` carries the finished policy.
 
-The dashboard will attempt a first draft for you. The issue's page has **prevent this →**; it
+From a terminal, `fp policies candidacy --issue <id>` checks whether a policy fits;
+`fp policies author "<grounded intent>"` drafts and replays one, and
+`fp policies backtest <file|id>` tests your chosen revision. These need a signed-in session,
+not an API key, and none of them publishes.
+
+The dashboard will also attempt a first draft for you. The issue's page has **prevent this →**; it
 opens the hand-off link, `https://app.befailproof.ai/<org>/policies/new?from_issue=<issue-id>`
 (the older `/<org>/policy-editor?from_issue=` links still land there, query kept), which fills
 in the finding's words and drafts a policy for you to review and then test on past calls.

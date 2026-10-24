@@ -6,6 +6,9 @@ organisation. Reading needs `events:read`; creating an alert needs alert write a
 `fp` has no command that drafts or replays an alert. You compute the baseline and the
 replay yourself with `fp query run`, then create the alert on the dashboard's form or with
 `fp alerts create`. Globals go before the command: `fp --json query run …`.
+`fp query compose "<question>"` can draft the baseline/replay SQL; it needs
+a signed-in session (`fp login`), and `--run` executes the SQL. With a key, write
+the SQL yourself and use `fp query run --sql`.
 
 ## Real names first
 
@@ -68,7 +71,7 @@ you got them ("by SQL over the last 7 days, upper bound").
 
 ## Create it
 
-**On the form (preferred):** `https://app.befailproof.ai/<org>/alerts/new`. The fields
+**On the form:** `https://app.befailproof.ai/<org>/alerts/new`. The fields
 are the ones `triggers` lists per kind, and below them the form draws its own estimate for
 the rule as it stands — "last 24h · would have fired N times", hour by hour (not for a
 query alert). The dashboard assistant on that page can also draft the alert from the
@@ -91,3 +94,18 @@ Read an existing alert of the same kind (`fp --json alerts show <name>`) to conf
 shape before sending one. Creating an alert is a change to the org: state the exact
 command and get the user's OK first. `fp alerts test <name>` sends a test notification
 through its channels — it checks delivery, not the rule.
+
+## Recipients and linked issues
+
+`fp --json alerts recipients` lists the recipients available for routing;
+use real recipients from that response rather than inventing an address.
+`fp --json alerts issues <alert_id>` reads the issues one alert raised; it takes the
+alert's **id** (`fp alerts list --show-id`), not its name. `--create` raises one under
+it: `--create --title "…" [--summary "…"]`, or `--create --file body.json`; the body flags
+without `--create` are a usage error, and creating needs `issues:create`. It confirms on a
+terminal; show the proposed issue and get approval first. Listing linked issues does not
+replay the alert.
+
+These new commands support `--json`; a 404 from an older Cloud reports
+`not available on this FailproofAI Cloud yet` and exits 6. Do not interpret that
+as an empty recipient list or a rule with no issues.

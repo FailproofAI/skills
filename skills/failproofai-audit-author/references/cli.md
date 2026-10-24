@@ -8,6 +8,9 @@ organisation. Reading needs `events:read` and `audits:read`; creating needs
 scope have traffic, how often does each signal fire — are SQL you run with
 `fp query run`; the audit itself is made on the dashboard's form or with
 `fp audits create`. Globals go before the command: `fp --json query run …`.
+For AI-assisted baseline SQL, `fp query compose "<question>"` prints a draft;
+`--run` executes it. It requires a signed-in session (`fp login`); in key mode
+use `fp query run --sql` with SQL you have checked.
 
 ## Step 3 — scope: real ids, and traffic in them
 
@@ -52,7 +55,7 @@ unknown rather than guessing one.
 
 ## Create it
 
-**On the form (preferred):** `https://app.befailproof.ai/<org>/audits/new`, fields as in
+**On the form:** `https://app.befailproof.ai/<org>/audits/new`, fields as in
 `form`. It accepts `?intent=` (the request in the user's words), `?description=`,
 `?name=`, `?environment=` and `?agent_id=` to prefill; the dashboard assistant there can
 draft the audit and show its preview (sessions read per run, what the catalog would flag,
@@ -85,3 +88,20 @@ Creating an audit is a change to the org, and a new enabled audit runs immediate
 state the command and get the user's OK first. Afterwards `fp audits run <name>` only
 queues a run — poll `fp audits runs <name>` until it reads `succeeded`, then
 `fp audits findings --audit <name>`.
+
+## Contracts
+
+`fp audits contracts` manages **agent contracts**: what each agent is supposed to do,
+which every audit reads. `fp --json audits contracts list` and
+`fp --json audits contracts show <id>` read them;
+`fp audits contracts create --agent-id <agent> --body "markdown"` (or `--body @file.md`,
+or `--file` with the API JSON `{agent_id, body, enabled}`) adds one, and
+`fp audits contracts update <id> [--agent-id …] [--body …] [--enabled|--disabled] [--file …]`
+keeps every field you do not pass. The body is at most 5000 characters, and there is no
+delete. Reads need `audits:read`, writes `audits:write`. Read the existing contract first,
+state the exact change and get approval before creating or updating; reading a contract
+does not create an audit or schedule a run.
+
+These new commands support `--json`. An older Cloud's 404 prints
+`not available on this FailproofAI Cloud yet` and exits 6; it is not evidence
+that the org has no contracts.

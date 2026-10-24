@@ -17,8 +17,8 @@ description: |-
 
 An evaluation runs over a finished session and returns one of three things: a score
 (a 0–1 fraction), a metric (a quantity with a unit), or an assertion (pass/fail).
-You describe it in plain English and the authoring page writes it, tests it against
-real sessions, and deploys it.
+You describe it in plain English, then author it through the dashboard or `fp`
+and test it against real sessions before deployment.
 
 So the code is not the scarce thing. **Knowing which number is worth having is.**
 That is this skill's entire job:
@@ -28,8 +28,10 @@ That is this skill's entire job:
 
 ## Where this stops
 
-You produce **proposals**, not evaluations. Each proposal ends in a prompt the user
-can paste into eval authoring, which handles composing, backtesting and deploying.
+You produce **proposals**, not evaluations. Each proposal ends in an actionable
+authoring handoff: a dashboard link there, or a terminal drafting command when
+running with `fp`. Follow `failproofai-eval-author` when the user chooses to author
+one; choosing a proposal is not itself permission to deploy.
 Say this out loud at the start:
 
 > "We'll read your real sessions and come out with a short list of what's worth
@@ -175,22 +177,24 @@ Two limits to hold firm on:
   renaming splits the history and breaks every trend built on it. Agree the exact
   strings now.
 
-## 8. Hand over the prompt — and the link, in the same breath
+## 8. Hand over the prompt — and the authoring action, in the same breath
 
 The deliverable for each survivor is **the prompt**, written so the authoring page
 composes cleanly from it on the first try. That has its own craft — the grammar that
 picks the result type, how specific to be, which field names to name outright. See
 `references/writing-the-prompt.md`.
 
-**Then build the link for every proposal, before you write your answer.** As the
-dashboard assistant that is `build_eval_authoring_link`, once per survivor. From a
-machine with `fp` there is no such tool — build it yourself, as `references/cli.md`
-shows. Either way the link goes in the proposal. A proposal without its link is not
+**In the dashboard, build the link for every proposal, before you write your answer.**
+That is `build_eval_authoring_link`, once per survivor. From a machine with `fp`,
+provide `fp evaluators draft "<intent>" --kind code|judge|jev --out spec.json`
+with the chosen kind and a distinct filename, as `references/cli.md` shows.
+That reference carries the dry-run and `create` handoff after approval.
+Either way the authoring action goes in the proposal. A proposal without it is not
 finished — the whole point is that the operator can act on it in one click, and a
 prompt they have to copy, navigate to authoring, and paste is most of the friction
 this exists to remove.
 
-Three things not to do, because each one reads as helpful and lands as a dead end:
+In the dashboard, three things not to do, because each one reads as helpful and lands as a dead end:
 
 - **Do not offer to generate the links.** "Shall I generate the authoring links?" is
   a round trip that buys nothing — you already know which proposals you are making.
@@ -199,7 +203,7 @@ Three things not to do, because each one reads as helpful and lands as a dead en
 - **Do not write the words "link" or "here are the links" without a link.** Describing
   a link you did not build is worse than omitting it: it reads as done.
 
-The rule in one line: **if you named a proposal, you built its link.**
+The rule in one line: **if you named a proposal, you supplied its authoring action.**
 
 ## The proposal format
 
@@ -223,7 +227,8 @@ Each proposal, in full:
 > name and input exactly. Read `tool_use.tool_name` and `tool_use.input`. 0 when every
 > call is distinct, 1 when every call after the first is a repeat."
 >
-> **Author it:** [/acme/eval-authoring/new?intent=…](#) ← the link from step 8
+> **Author it:** the dashboard link from step 8, or a terminal drafting command
+> with this prompt and `--out tool_retry_loop.json`.
 
 **Every field above is required, including the last one.** A proposal that stops at
 the prompt has handed the operator homework instead of a decision.
@@ -250,7 +255,7 @@ slate:
 |---|---|
 | `references/patterns.md` | observation → candidate catalog, and the result-kind mapping |
 | `references/writing-the-prompt.md` | writing an intent prompt that composes cleanly first try |
-| `references/cli.md` | running this locally with `fp` — commands, and the gotchas that make one lie |
+| `references/cli.md` | running this locally with `fp` — grounding, and the draft/test/create handoff |
 | `references/dashboard.md` | running this as the dashboard assistant — which tool answers what |
 
 The method is one text; only the grounding mechanics differ, so each surface

@@ -14,8 +14,9 @@ description: |-
 # Writing a hosted evaluation
 
 A hosted evaluation is ONE Python expression (or a jev/judge envelope) that reads a
-finished agent session and returns an `EvalResult`. The operator reviews the draft and
-deploys it; the author never deploys anything.
+finished agent session and returns an `EvalResult`. In the dashboard, the operator
+reviews and submits the draft. A coding agent with `fp` can test, create and deploy
+it from the terminal after the operator approves the definition.
 
 These reference files are the method. They are also, verbatim and in this order, the
 instructions FailproofAI Cloud's own evaluation drafter runs on — which is why they talk to
@@ -48,6 +49,7 @@ dashboard's new-evaluation form.
    returned with `repair`. A score that comes out identical on a good and a bad session
    has not been shown to measure anything yet.
 
-The mechanics of steps 2 and 4 differ by where you are running — see
+The grounding, testing and deployment mechanics differ by where you are running — see
 `references/dashboard.md` (the dashboard assistant) or `references/cli.md` (a coding
-agent with `fp`). You will have one of the two, not both.
+agent with `fp`: schema → source → dry run → create/deploy → results).
+You will have one of the two, not both.

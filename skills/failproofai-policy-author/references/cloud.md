@@ -6,7 +6,7 @@ local `failproofai audit` reads one machine's transcripts, FailproofAI Cloud hol
 every agent in an org — so it sees things a local audit structurally cannot.
 
 Figures quoted below are illustrative of the shapes you will see, not from any
-particular org.
+particular org. AI authoring, backtest and candidacy commands need session login.
 
 ## Preflight
 
@@ -292,10 +292,33 @@ of that lands on calls that actually failed. SKILL.md's *Backtest it against rea
 traffic* carries the decision rule — enforceability is judged before precision, and the verdict
 vocabulary. This is the operating procedure.
 
-**There is no CLI surface for it.** `fp policies` is `list show publish enable disable delete
-test compose` and nothing else; there is no `fp policies backtest` and no `fp policies author`.
-Say that plainly rather than implying a flag exists. Both live in the dashboard (at **test**,
-pick how far back — last 24 hours, 7 days or 30 days, default 7 days — and whose calls):
+Use the session-only `fp policies` authoring flow:
+
+```bash
+fp --json policies candidacy --issue <issue-id>
+fp --json policies author "Block the specific unsafe tool call observed in this issue."
+fp --json policies backtest ./rule.mjs --hours 168
+```
+
+Replace the issue id and intent with the grounded finding; inspect the authoring
+output and save the selected source as `rule.mjs` before the backtest. Candidacy
+asks whether a policy can address the issue; it is not deployment approval.
+`author` drafts and backtests (`--kind jev|both` asks for Jev checks), while
+`backtest <file|id>` replays a local file or an existing policy id (`--agent-id`,
+`--env`, `--hours` narrow it). Inspect the verdict, coverage and enforceability before
+publishing. Publishing a version still deploys nothing by itself.
+
+For Jev checks, `fp --json policies backtest --semantic checks.json` (alone: `jev`; with a
+source file: `both`), or a published `jev`/`both` id, returns a free **estimate** of how many
+stored calls match; `--run --sample N` (N ≤ 50, default window 168 hours) actually asks Jev
+and **spends the org's daily Jev allowance**, so get the user's OK first.
+
+All three commands support `--json` and need `fp login`. In API-key mode they
+exit 2 with "`fp <cmd>` needs a signed-in session: run `fp login`".
+A 404 on an older Cloud prints `not available on this FailproofAI Cloud yet`
+and exits 6; it is not a successful backtest with zero fires.
+The dashboard offers the same work when a person prefers the form (at **test**, pick how
+far back — last 24 hours, 7 days or 30 days, default 7 days — and whose calls):
 
 | Route | What it is |
 |---|---|
